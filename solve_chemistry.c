@@ -112,6 +112,14 @@ int local_solve_chemistry(chemistry_data *my_chemistry,
 
   /* Return if this doesn't concern us. */
 
+   //printf("=== Crackle RT ionization & heating rates ===\n");
+   //printf("Crackle RT_heating_rate         = %e\n", *(my_fields->RT_heating_rate));
+   //printf("Crackle RT_HI_ionization_rate   = %e\n", *(my_fields->RT_HI_ionization_rate));
+   //printf("Crackle RT_HeI_ionization_rate  = %e\n", *(my_fields->RT_HeI_ionization_rate));
+   //printf("Crackle RT_HeII_ionization_rate = %e\n", *(my_fields->RT_HeII_ionization_rate));
+   //printf("Crackle RT_H2_dissociation_rate = %e\n", *(my_fields->RT_H2_dissociation_rate));
+   //printf("Crackle HI_density         = %e\n", *(my_fields->HI_density));
+   //printf("Crackle HII_density         = %e\n", *(my_fields->HII_density));
   if (!my_chemistry->use_grackle)
     return SUCCESS;
 

@@ -38,6 +38,18 @@ static inline void compute_electron_density(grackle_part_data *gp)
 	    gp->HM_density += gp->e_density;
 	    gp->e_density = 0.;
 	}
+	if (gp->e_density < 0.) {
+        fprintf(stderr, "Assertion failed: gp->e_density = %g\n", gp->e_density);
+    }
+	if (isnan(gp->e_density)) {
+    	fprintf(stderr, "Error: e_density is NaN! Check inputs.\n");
+	fprintf(stderr, "Assertion failed: gp->HII_density = %g\n"
+			"gp->HeII_density = %g\n"
+			"gp->HeIII_density = %g\n"
+			"gp->H2II_density = %g\n"
+			"gp->HM_density = %g\n", gp->HII_density, gp->HeII_density, gp->HeIII_density, gp->H2II_density, gp->HM_density);
+    	//abort();  // Or handle the issue in another way
+}
 	assert(gp->e_density >= 0.);
 }
 
