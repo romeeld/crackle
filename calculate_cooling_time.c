@@ -26,6 +26,8 @@ extern chemistry_data_storage grackle_rates;
 
 double get_temperature_units(code_units *my_units);
 
+void crackle_cooling_time();
+
 int update_UVbackground_rates(chemistry_data *my_chemistry,
                               chemistry_data_storage *my_rates,
                               photo_rate_storage *my_uvb_rates,

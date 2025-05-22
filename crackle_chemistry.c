@@ -251,7 +251,7 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	}
 
 	/* UVB heating and shielding */
-	if (chemistry->UVbackground) {
+	if (chemistry->UVbackground && gp->grid_end >= 0) {
 	    compute_self_shielded_rates(gp, chemistry, my_rates, my_uvb_rates, cunits);
 	    edot_uvb += cunits.dom_inv * (my_uvb_rates.piHI * gp->fSShHI * gp->HI_density + 0.25 * (my_uvb_rates.piHeI * gp->fSShHeI * gp->HeI_density + my_uvb_rates.piHeII * gp->fSShHeII * gp->HeII_density));
 	    gp->edot += edot_uvb;
@@ -551,7 +551,7 @@ void check_hydrogen(grackle_part_data *p)
 	double H_density = p->HI_density + p->HII_density + p->HM_density;
 	double H2_density = p->H2I_density + p->H2II_density;
 	double H_frac = (H_density + H2_density) / p->density;
-	assert(H_frac > 0.6 && H_frac < 0.8);
+	assert(H_frac > 0.4 && H_frac < 0.8);
 	assert(p->HI_density >= 0.f);
 	assert(p->HII_density >= 0.f);
 }

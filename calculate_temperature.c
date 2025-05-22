@@ -50,6 +50,8 @@ extern void FORTRAN_NAME(calc_temp_cloudy_g)(
 
 double get_temperature_units(code_units *my_units);
 
+void crackle_temperature();
+
 int local_calculate_pressure(chemistry_data *my_chemistry,
                              chemistry_data_storage *my_rates,
                              code_units *my_units,
