@@ -551,6 +551,22 @@ void check_hydrogen(grackle_part_data *p)
 	double H_density = p->HI_density + p->HII_density + p->HM_density;
 	double H2_density = p->H2I_density + p->H2II_density;
 	double H_frac = (H_density + H2_density) / p->density;
+	
+	if (isnan(H_frac) || H_frac <= 0.4 || H_frac >= 0.8) {
+        	fprintf(stderr, "Assertion failed in check_hydrogen:\n");
+        	fprintf(stderr, "  HI_density  = %g\n", p->HI_density);
+        	fprintf(stderr, "  HII_density = %g\n", p->HII_density);
+        	fprintf(stderr, "  HM_density  = %g\n", p->HM_density);
+        	fprintf(stderr, "  H2I_density = %g\n", p->H2I_density);
+        	fprintf(stderr, "  H2II_density = %g\n", p->H2II_density);
+        	fprintf(stderr, "  Total density = %g\n", p->density);
+        	fprintf(stderr, "  H_frac = %g (expected between 0.4 and 0.8)\n", H_frac);
+        	if (isnan(H_frac))
+            		fprintf(stderr, "  Warning: H_frac is NaN!\n");
+		fflush(stderr);  // Make sure output is flushed before crash
+		assert(!isnan(H_frac) && H_frac > 0.4 && H_frac < 0.8);
+		//assert(0);  // Triggers abort so you still stop execution
+    	}
 	assert(H_frac > 0.4 && H_frac < 0.8);
 	assert(p->HI_density >= 0.f);
 	assert(p->HII_density >= 0.f);
