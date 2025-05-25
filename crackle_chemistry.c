@@ -575,7 +575,16 @@ void check_hydrogen(grackle_part_data *p)
 void evolve_hydrogen(grackle_part_data *p, grackle_part_data *gp_old, chemistry_data *chemistry, chemistry_rate_storage my_rates, double dtit) /* from step_rate_g() */
 { 
 	double scoef, acoef;
-
+	
+	if (isnan(p->HI_density) || isnan(p->HII_density) || isnan(p->HM_density)) {
+    		printf("About to call check_hydrogen in evolve_hydrogen: found NaN in particle!\n");
+    		printf("  HI_density  = %e\n", p->HI_density);
+		printf("  HII_density = %e\n", p->HII_density);
+		printf("  HM_density  = %e\n", p->HM_density);
+		fflush(stdout);
+	}
+	check_hydrogen(p);
+	
 	if (!isfinite(p->RT_HI_ionization_rate)) {
     	fprintf(stderr, "WARNING: Invalid RT_HI_ionization_rate (%e), setting to 0.\n",
             p->RT_HI_ionization_rate);
@@ -760,13 +769,86 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
 		(my_rates.k10 * HIp + my_rates.k18 * dep +
 		my_rates.k19 * HMp + my_rates.k28shield + my_rates.k30shield)
 		- p->H2II_density;
+	if (isnan(p->delta_H2II)) {
+   		printf("\n==== NaN DETECTED in delta_H2II! ====\n");
+    		printf("Inputs to delta_H2II calculation:\n");
+
+    		printf("HIp  = %e\n", HIp);
+    		printf("HIIp = %e\n", HIIp);
+    		printf("H2Ip = %e\n", H2Ip);
+    		printf("HMp  = %e\n", HMp);
+    		printf("dep  = %e\n", dep);
+    		printf("k9   = %e\n", my_rates.k9);
+    		printf("k11  = %e\n", my_rates.k11);
+    		printf("k17  = %e\n", my_rates.k17);
+    		printf("k29shield = %e\n", my_rates.k29shield);
+    		printf("k10  = %e\n", my_rates.k10);
+    		printf("k18  = %e\n", my_rates.k18);
+    		printf("k19  = %e\n", my_rates.k19);
+    		printf("k28shield = %e\n", my_rates.k28shield);
+    		printf("k30shield = %e\n", my_rates.k30shield);
+    		printf("H2II_density (before) = %e\n", p->H2II_density);
+
+    		double numerator = 2.f * (my_rates.k9 * HIp * HIIp +
+                              0.5 * my_rates.k11 * H2Ip * HIIp +
+                              my_rates.k17 * HMp * HIIp +
+                              my_rates.k29shield * H2Ip);
+    		double denominator = my_rates.k10 * HIp +
+                         my_rates.k18 * dep +
+                         my_rates.k19 * HMp +
+                         my_rates.k28shield +
+                         my_rates.k30shield;
+
+    		printf("Numerator   = %e\n", numerator);
+   		printf("Denominator = %e\n", denominator);
+
+    		fflush(stdout);  // make sure it's printed even if crash follows
+	}
 
 	return;
 }
 
+void print_nan_check(const grackle_part_data *gp, const char *label) {
+    printf("\n=== NaN Check: %s ===\n", label);
+    printf("HI_density   = %e\n", gp->HI_density);
+    printf("HII_density  = %e\n", gp->HII_density);
+    printf("H2I_density  = %e\n", gp->H2I_density);
+    printf("H2II_density = %e\n", gp->H2II_density);
+    printf("HM_density   = %e\n", gp->HM_density);
+    printf("HeI_density  = %e\n", gp->HeI_density);
+    printf("HeII_density = %e\n", gp->HeII_density);
+    printf("HeIII_density= %e\n", gp->HeIII_density);
+    printf("rhoH         = %e\n", gp->rhoH);
+    printf("delta_HI     = %e\n", gp->delta_HI);
+    printf("delta_HII    = %e\n", gp->delta_HII);
+    printf("delta_H2I    = %e\n", gp->delta_H2I);
+    printf("delta_H2II   = %e\n", gp->delta_H2II);
+    printf("delta_HM     = %e\n", gp->delta_HM);
+    printf("delta_HeI    = %e\n", gp->delta_HeI);
+    printf("delta_HeII   = %e\n", gp->delta_HeII);
+    printf("delta_HeIII  = %e\n", gp->delta_HeIII);
+    fflush(stdout);
+}
+
+void check_nan_and_print(const grackle_part_data *gp, const char *label) {
+    if (
+        isnan(gp->HI_density)   || isnan(gp->HII_density)  || isnan(gp->H2I_density) ||
+        isnan(gp->H2II_density) || isnan(gp->HM_density)   ||
+        isnan(gp->HeI_density)  || isnan(gp->HeII_density) || isnan(gp->HeIII_density) ||
+        isnan(gp->rhoH)         ||
+        isnan(gp->delta_HI)     || isnan(gp->delta_HII)    || isnan(gp->delta_H2I) ||
+        isnan(gp->delta_H2II)   || isnan(gp->delta_HM)     ||
+        isnan(gp->delta_HeI)    || isnan(gp->delta_HeII)   || isnan(gp->delta_HeIII)
+    ) {
+        print_nan_check(gp, label);
+    }
+}
+
 void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry)
 {
+        check_nan_and_print(gp, "Before limiting changes");
 	check_hydrogen(gp);
+	
 	/* Limit change for H species */
 	if (gp->HI_density + gp->delta_HI < 0.) gp->delta_HI = -gp->HI_density;
 	if (gp->HI_density + gp->delta_HI > gp->rhoH) gp->delta_HI = gp->rhoH - gp->HI_density;
@@ -813,7 +895,8 @@ void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry
 	gp->HeI_density *= He_factor;
 	gp->HeII_density *= He_factor;
 	gp->HeIII_density *= He_factor;
-
+	
+	check_nan_and_print(gp, "After conservation correction");
 	check_hydrogen(gp);
 
 	/* Compute new electron density */
