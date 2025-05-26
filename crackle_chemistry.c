@@ -451,8 +451,10 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
     	double term3 = my_rates.k3 * p->e_density;
     	
       if (chemistry->UVbackground > 0) {
-        double term4 = term3 + my_rates.k26;
+          double term4 = term3 + my_rates.k26;
     	  acoef = term4;
+	  if (isnan(my_rates.k26) && chemistry->UVbackground > 0) fprintf(stderr, "Error: NaN detected in my_rates.k26 = %g\n", my_rates.k26);
+	  if (isnan(term4) && chemistry->UVbackground > 0) fprintf(stderr, "Error: NaN detected in term4 (term3 + k26) = %g\n", term4);
       }
 
     	if (chemistry->use_radiative_transfer) {
@@ -473,8 +475,6 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
 
     	if (isnan(my_rates.k3)) fprintf(stderr, "Error: NaN detected in my_rates.k3 = %g\n", my_rates.k3);
     	if (isnan(term3)) fprintf(stderr, "Error: NaN detected in term3 (k3 * e_density) = %g\n", term3);
-    	if (isnan(my_rates.k26) && chemistry->UVbackground > 0) fprintf(stderr, "Error: NaN detected in my_rates.k26 = %g\n", my_rates.k26);
-    	if (isnan(term4) && chemistry->UVbackground > 0) fprintf(stderr, "Error: NaN detected in term4 (term3 + k26) = %g\n", term4);
     	if (isnan(acoef)) fprintf(stderr, "Error: NaN detected in acoef = %g\n", acoef);
 
 		
