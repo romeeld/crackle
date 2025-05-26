@@ -32,7 +32,9 @@ int update_UVbackground_rates(chemistry_data *my_chemistry,
                               chemistry_data_storage *my_rates,
                               photo_rate_storage *my_uvb_rates,
                               code_units *my_units);
- 
+
+void crackle_cooling_time();
+
 extern void FORTRAN_NAME(cool_multi_time_g)(
 	gr_float *d, gr_float *e, gr_float *u, gr_float *v, gr_float *w, gr_float *de,
 	gr_float *HI, gr_float *HII, gr_float *HeI, gr_float *HeII, gr_float *HeIII,

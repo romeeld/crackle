@@ -47,7 +47,7 @@ static inline void compute_self_shielded_rates(grackle_part_data *gp, chemistry_
 	my_rates->k31shield = my_rates->k31;
 
 	/* No self-shielding, so no changes to rates */
-	if (chemistry->self_shielding_method == 0) return;
+	if (chemistry->self_shielding_method == 0 || chemistry->UVbackground == 0) return;
 
         /* We have self-shielding! */
         /* HI self-shielding factor */
@@ -251,16 +251,27 @@ static inline void molecular_species_rates(interp_struct *interpolation, chemist
 	my_rates->n_cr_d2 = interpolate_rates(grackle_rates.n_cr_d2, interpolation->binfrac, interpolation->index);
 }
 
-static inline void deuterium_species_rates(interp_struct *interpolation, chemistry_data_storage grackle_rates, chemistry_rate_storage *my_rates)
+static inline void deuterium_species_rates(int chemistry_flag, interp_struct *interpolation, chemistry_data_storage grackle_rates, chemistry_rate_storage *my_rates)
 {
-	/* 12-species model for mode > 2 */
-	my_rates->k50 = interpolate_rates(grackle_rates.k50, interpolation->binfrac, interpolation->index);
-	my_rates->k51 = interpolate_rates(grackle_rates.k51, interpolation->binfrac, interpolation->index);
-	my_rates->k52 = interpolate_rates(grackle_rates.k52, interpolation->binfrac, interpolation->index);
-	my_rates->k53 = interpolate_rates(grackle_rates.k53, interpolation->binfrac, interpolation->index);
-	my_rates->k54 = interpolate_rates(grackle_rates.k54, interpolation->binfrac, interpolation->index);
-	my_rates->k55 = interpolate_rates(grackle_rates.k55, interpolation->binfrac, interpolation->index);
-	my_rates->k56 = interpolate_rates(grackle_rates.k56, interpolation->binfrac, interpolation->index);
+        if (chemistry_flag > 2) {
+	    /* 12-species model for mode > 2 */
+	    my_rates->k50 = interpolate_rates(grackle_rates.k50, interpolation->binfrac, interpolation->index);
+	    my_rates->k51 = interpolate_rates(grackle_rates.k51, interpolation->binfrac, interpolation->index);
+	    my_rates->k52 = interpolate_rates(grackle_rates.k52, interpolation->binfrac, interpolation->index);
+	    my_rates->k53 = interpolate_rates(grackle_rates.k53, interpolation->binfrac, interpolation->index);
+	    my_rates->k54 = interpolate_rates(grackle_rates.k54, interpolation->binfrac, interpolation->index);
+	    my_rates->k55 = interpolate_rates(grackle_rates.k55, interpolation->binfrac, interpolation->index);
+	    my_rates->k56 = interpolate_rates(grackle_rates.k56, interpolation->binfrac, interpolation->index);
+	}
+	else {
+	    my_rates->k50 = 0.;
+	    my_rates->k51 = 0.;
+	    my_rates->k52 = 0.;
+	    my_rates->k53 = 0.;
+	    my_rates->k54 = 0.;
+	    my_rates->k55 = 0.;
+	    my_rates->k56 = 0.;
+	}
 }
 
 static inline void dust_species_rates(double tdust, double dust2gas, chemistry_data *chemistry, chemistry_data_storage grackle_rates, chemistry_rate_storage *my_rates, interp_struct *interpolation)
@@ -311,9 +322,7 @@ static inline void lookup_chemistry_coeffs(int chemistry_flag, chemistry_data_st
         }
 
         /* Interpolate deuterium species rate coefficients for given T */
-        if (chemistry_flag > 2) {
-            deuterium_species_rates(interpolation, grackle_rates, my_rates);
-        }
+        deuterium_species_rates(chemistry_flag, interpolation, grackle_rates, my_rates);
 }
 
 static inline double interpolate_3d(double *par, int *ind, double *cloudy_data, long long int *griddim, double *gridpar[3])

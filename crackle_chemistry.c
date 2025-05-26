@@ -449,8 +449,11 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
     	scoef = term2;
 
     	double term3 = my_rates.k3 * p->e_density;
-    	double term4 = term3 + my_rates.k26;
-    	acoef = term4;
+    	
+      if (chemistry->UVbackground > 0) {
+        double term4 = term3 + my_rates.k26;
+    	  acoef = term4;
+      }
 
     	if (chemistry->use_radiative_transfer) {
         	double term5 = p->RT_HeI_ionization_rate;
@@ -470,8 +473,8 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
 
     	if (isnan(my_rates.k3)) fprintf(stderr, "Error: NaN detected in my_rates.k3 = %g\n", my_rates.k3);
     	if (isnan(term3)) fprintf(stderr, "Error: NaN detected in term3 (k3 * e_density) = %g\n", term3);
-    	if (isnan(my_rates.k26)) fprintf(stderr, "Error: NaN detected in my_rates.k26 = %g\n", my_rates.k26);
-    	if (isnan(term4)) fprintf(stderr, "Error: NaN detected in term4 (term3 + k26) = %g\n", term4);
+    	if (isnan(my_rates.k26) && chemistry->UVbackground > 0) fprintf(stderr, "Error: NaN detected in my_rates.k26 = %g\n", my_rates.k26);
+    	if (isnan(term4) && chemistry->UVbackground > 0) fprintf(stderr, "Error: NaN detected in term4 (term3 + k26) = %g\n", term4);
     	if (isnan(acoef)) fprintf(stderr, "Error: NaN detected in acoef = %g\n", acoef);
 
 		
@@ -519,9 +522,11 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
 	p->delta_HeIII = (scoef * dtit + p->HeIII_density) / (1.f + acoef * dtit) - p->HeIII_density; 
 	if (p->delta_HeIII + p->HeIII_density < 0.f ) p->delta_HeIII = -p->HeIII_density;
 
-	/* if (p->delta_HeII != p->delta_HeII || p->delta_HeIII != p->delta_HeIII) {
-	    fprintf(stdout, "dHeII=%g dHeIII=%g scoef=%g acoef=%g HeIIp=%g e=%g k3=%g k4=%g k5=%g k6=%g k25=%g k25shielf=%g k26=%g\n", p->delta_HeII, p->delta_HeIII, scoef, acoef, HeIIp, p->e_density, my_rates.k3, my_rates.k4, my_rates.k5, my_rates.k6, my_rates.k25, my_rates.k25shield, my_rates.k26);
+	/*if (p->delta_HeII != p->delta_HeII || p->delta_HeIII != p->delta_HeIII) {
+	    fprintf(stdout, "TROUBLE: dHeII=%g dHeIII=%g scoef=%g acoef=%g HeIIp=%g e=%g k3=%g k4=%g k5=%g k6=%g k25=%g k25shielf=%g k26=%g\n", p->delta_HeII, p->delta_HeIII, scoef, acoef, HeIIp, p->e_density, my_rates.k3, my_rates.k4, my_rates.k5, my_rates.k6, my_rates.k25, my_rates.k25shield, my_rates.k26);
 	    fflush(stdout);
+	    assert(p->delta_HeII == p->delta_HeII);
+	    assert(p->delta_HeIII == p->delta_HeIII);
 	}*/
 	
 	/* Check for NaN values */
@@ -762,13 +767,24 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
 	H2Ip = p->H2I_density + p->delta_H2I;
 	HMp = p->HM_density + p->delta_HM;
 	dep = p->e_density + p->delta_e;
-	p->delta_H2II = 2.f * (my_rates.k9 * HIp * HIIp +
+	if (chemistry->UVbackground > 0) {
+	    p->delta_H2II = 2.f * (my_rates.k9 * HIp * HIIp +
 		0.5 * my_rates.k11 * H2Ip * HIIp +
 		my_rates.k17 * HMp * HIIp +
 		my_rates.k29shield * H2Ip) / 
 		(my_rates.k10 * HIp + my_rates.k18 * dep +
 		my_rates.k19 * HMp + my_rates.k28shield + my_rates.k30shield)
 		- p->H2II_density;
+	}
+	else {
+	    p->delta_H2II = 2.f * (my_rates.k9 * HIp * HIIp +
+		0.5 * my_rates.k11 * H2Ip * HIIp +
+		my_rates.k17 * HMp * HIIp) / 
+		(my_rates.k10 * HIp + my_rates.k18 * dep +
+		my_rates.k19 * HMp)
+		- p->H2II_density;
+  }
+  
 	if (isnan(p->delta_H2II)) {
    		printf("\n==== NaN DETECTED in delta_H2II! ====\n");
     		printf("Inputs to delta_H2II calculation:\n");
@@ -805,6 +821,12 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
     		fflush(stdout);  // make sure it's printed even if crash follows
 	}
 
+	/*if (p->delta_H2I != p->delta_H2I || p->delta_H2II != p->delta_H2II) {
+	    fprintf(stdout, "TROUBLE: dH2I=%g dH2II=%g scoef=%g acoef=%g H2Ip=%g e=%g k3=%g k4=%g k5=%g k6=%g k25=%g k25shielf=%g k26=%g\n", p->delta_H2I, p->delta_H2II, scoef, acoef, H2Ip, p->e_density, my_rates.k3, my_rates.k4, my_rates.k5, my_rates.k6, my_rates.k25, my_rates.k25shield, my_rates.k26);
+	    fflush(stdout);
+	    assert(p->delta_H2I == p->delta_H2I);
+	    assert(p->delta_H2II == p->delta_H2II);
+	}*/
 	return;
 }
 

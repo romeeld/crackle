@@ -63,7 +63,9 @@ int local_calculate_temperature_table(chemistry_data *my_chemistry,
                                       code_units *my_units,
                                       grackle_field_data *my_fields,
                                       gr_float *temperature);
- 
+
+void crackle_temperature();
+
 int local_calculate_temperature(chemistry_data *my_chemistry,
                                 chemistry_data_storage *my_rates,
                                 code_units *my_units,
