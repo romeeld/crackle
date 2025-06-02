@@ -4,6 +4,89 @@
 #include <math.h>
 #include <string.h>
 #include <assert.h>
+#include <stdbool.h>
+
+bool has_nan_in_gp(const grackle_part_data *gp) {
+    bool found_nan = false;
+
+    // Macro to reduce repetition
+    #define CHECK_NAN(field) \
+        if (isnan(gp->field)) { \
+            printf("NaN detected in gp->%s\n", #field); \
+            found_nan = true; \
+        }
+
+    CHECK_NAN(density);
+    CHECK_NAN(HI_density);
+    CHECK_NAN(HII_density);
+    CHECK_NAN(HM_density);
+    CHECK_NAN(HeI_density);
+    CHECK_NAN(HeII_density);
+    CHECK_NAN(HeIII_density);
+    CHECK_NAN(H2I_density);
+    CHECK_NAN(H2II_density);
+    CHECK_NAN(DI_density);
+    CHECK_NAN(DII_density);
+    CHECK_NAN(HDI_density);
+    CHECK_NAN(e_density);
+    CHECK_NAN(metal_density);
+    CHECK_NAN(internal_energy);
+    CHECK_NAN(x_velocity);
+    CHECK_NAN(y_velocity);
+    CHECK_NAN(z_velocity);
+    CHECK_NAN(volumetric_heating_rate);
+    CHECK_NAN(specific_heating_rate);
+    CHECK_NAN(temperature_floor);
+    CHECK_NAN(RT_heating_rate);
+    CHECK_NAN(RT_HI_ionization_rate);
+    CHECK_NAN(RT_HeI_ionization_rate);
+    CHECK_NAN(RT_HeII_ionization_rate);
+    CHECK_NAN(RT_H2_dissociation_rate);
+    CHECK_NAN(H2_self_shielding_length);
+    CHECK_NAN(H2_custom_shielding_factor);
+    CHECK_NAN(isrf_habing);
+    CHECK_NAN(dust_density);
+    CHECK_NAN(SNe_density);
+    CHECK_NAN(tdust);
+
+    CHECK_NAN(edot);
+    CHECK_NAN(edot_ext);
+    CHECK_NAN(dedot);
+    CHECK_NAN(HIdot);
+    CHECK_NAN(fSShHI);
+    CHECK_NAN(fSShHeI);
+    CHECK_NAN(fSShHeII);
+    CHECK_NAN(rhoH);
+    CHECK_NAN(rhoHe);
+    CHECK_NAN(rhoH2);
+    CHECK_NAN(mmw);
+    CHECK_NAN(tgas);
+    CHECK_NAN(logtem);
+    CHECK_NAN(delta_HI);
+    CHECK_NAN(delta_HII);
+    CHECK_NAN(delta_HeI);
+    CHECK_NAN(delta_HeII);
+    CHECK_NAN(delta_HeIII);
+    CHECK_NAN(delta_HM);
+    CHECK_NAN(delta_H2I);
+    CHECK_NAN(delta_H2II);
+    CHECK_NAN(delta_e);
+
+    for (int i = 0; i < NUM_METAL_SPECIES_GRACKLE; i++) {
+        if (isnan(gp->gas_metalDensity[i])) {
+            printf("NaN detected in gp->gas_metalDensity[%d]\n", i);
+            found_nan = true;
+        }
+        if (isnan(gp->dust_metalDensity[i])) {
+            printf("NaN detected in gp->dust_metalDensity[%d]\n", i);
+            found_nan = true;
+        }
+    }
+
+    return found_nan;
+
+    #undef CHECK_NAN
+}
 
 static inline void set_crackle_units(code_units *units, chemistry_data_storage grackle_rates, double gamma, crackle_units *cunits) {
                 /* Set units */

@@ -36,36 +36,43 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	interp_struct interpolation;
 	crackle_units cunits;
 
-	if (chemistry->UVbackground == 0) {
+	//if (chemistry->UVbackground == 0) {
 	/* Set up uv rates to be 0. */
-		my_uvb_rates.k24 = my_uvb_rates.k25 = my_uvb_rates.k26 =
-        	my_uvb_rates.k27 = my_uvb_rates.k28 = my_uvb_rates.k29 =
-        	my_uvb_rates.k30 = my_uvb_rates.k31 = my_uvb_rates.piHI =
-        	my_uvb_rates.piHeI = my_uvb_rates.piHeII = my_uvb_rates.crsHI =
-        	my_uvb_rates.crsHeI = my_uvb_rates.crsHeII =
-        	my_uvb_rates.comp_xray = my_uvb_rates.temp_xray = 0.;
+	//	my_uvb_rates.k24 = my_uvb_rates.k25 = my_uvb_rates.k26 =
+        //	my_uvb_rates.k27 = my_uvb_rates.k28 = my_uvb_rates.k29 =
+        //	my_uvb_rates.k30 = my_uvb_rates.k31 = my_uvb_rates.piHI =
+        //	my_uvb_rates.piHeI = my_uvb_rates.piHeII = my_uvb_rates.crsHI =
+        //	my_uvb_rates.crsHeI = my_uvb_rates.crsHeII =
+        //	my_uvb_rates.comp_xray = my_uvb_rates.temp_xray = 0.;
 
 		//my_uvb_rates.k26 = 0.0;
-		my_rates.k24 = 0.0;
-		my_rates.k25 = 0.0;
-		my_rates.k26 = 0.0;
-		my_rates.k27 = 0.0;
-		my_rates.k28 = 0.0;
-		my_rates.k29 = 0.0;
-		my_rates.k30 = 0.0;
-		my_rates.k31 = 0.0;
+	//	my_rates.k24 = 0.0;
+	//	my_rates.k25 = 0.0;
+	//	my_rates.k26 = 0.0;
+	//	my_rates.k27 = 0.0;
+	//	my_rates.k28 = 0.0;
+	//	my_rates.k29 = 0.0;
+	//	my_rates.k30 = 0.0;
+	//	my_rates.k31 = 0.0;
 
-		my_rates.piHI      = 0.0;
-		my_rates.piHeI     = 0.0;
-		my_rates.piHeII    = 0.0;
-		my_rates.crsHI     = 0.0;
-		my_rates.crsHeI    = 0.0;
-		my_rates.crsHeII   = 0.0;
-		my_rates.comp_xray = 0.0;
-	}
+	//	my_rates.piHI      = 0.0;
+	//	my_rates.piHeI     = 0.0;
+	//	my_rates.piHeII    = 0.0;
+	//	my_rates.crsHI     = 0.0;
+	//	my_rates.crsHeI    = 0.0;
+	//	my_rates.crsHeII   = 0.0;
+	//	my_rates.comp_xray = 0.0;
+	//}
 
 	/* Copy to grackle_part_data */
 	copy_grackle_fields_to_part(p, &gp, chemistry);
+	
+	/* Checking Nan for gp field data*/
+	if (chemistry->use_radiative_transfer){
+		if (has_nan_in_gp(&gp)) {
+    			printf("One or more NaNs found in gp structure before cooling calculation.\n");
+		}
+	}
 
 	/* Set up various unit conversions etc */
 	set_crackle_units(units, grackle_rates, chemistry->Gamma, &cunits);
