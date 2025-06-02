@@ -88,11 +88,11 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	if (gp.isrf_habing < 0.) gp.isrf_habing = 0.;
 
 	//printf("=== Crackle RT ionization & heating rates ===\n");
-        //printf("Crackle RT_heating_rate         = %e\n", p->RT_heating_rate);
-        //printf("Crackle RT_HI_ionization_rate   = %e\n", p->RT_HI_ionization_rate);
-        //printf("Crackle RT_HeI_ionization_rate  = %e\n", p->RT_HeI_ionization_rate);
-        //printf("Crackle RT_HeII_ionization_rate = %e\n", p->RT_HeII_ionization_rate);
-        //printf("Crackle RT_H2_dissociation_rate = %e\n", p->RT_H2_dissociation_rate);
+        //printf("Crackle RT_heating_rate         = %e\n", p->RT_heating_rate[0]);
+        //printf("Crackle RT_HI_ionization_rate   = %e\n", p->RT_HI_ionization_rate[0]);
+        //printf("Crackle RT_HeI_ionization_rate  = %e\n", p->RT_HeI_ionization_rate[0]);
+        //printf("Crackle RT_HeII_ionization_rate = %e\n", p->RT_HeII_ionization_rate[0]);
+        //printf("Crackle RT_H2_dissociation_rate = %e\n", p->RT_H2_dissociation_rate[0]);
 
 	while (dtcool < dt) {
 	    //if (gp.density > 2.e9) gp.verbose=1;
