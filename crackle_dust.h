@@ -126,6 +126,7 @@ static inline double dust_thermal_balance(double tdust, double tgas, double tcmb
         /* Compute dust heating-cooling rate */
         tdust4 = tdust * tdust * tdust * tdust;
         sol = gamma_isrf + 4.f * sigma_sb * kgr * (tcmb4 - tdust4) + gasgr * nh * (tgas-tdust);
+	return sol;
 }
 
 static inline void calculate_tdust_bisect(grackle_part_data *gp, double gasgr, double gamma_isrf, double tcmb)
@@ -167,6 +168,7 @@ static inline void calculate_tdust_bisect(grackle_part_data *gp, double gasgr, d
 	    if (sol > 0) tdlo = td;  // heating, so tdust should increase
 	    else tdhi = td;
 	    if (fabs(tdhi-tdlo) < tol * (tdhi+tdlo) || tdlo > tdhi) break;
+	    if (td > gp->tgas || td < tcmb) break;
             //if (gp->verbose) printf("sol: sol=%g nH=%g td=%g tg=%g tdold=%g %g %g isrf=%g\n",sol, gp->nH, td, gp->tgas, tdold, tdlo, tdhi, gamma_isrf);
             if (++iter > maxiter) {
                 printf("Crackle: Non-convergence in calculate_dust_temp(), returning tdust=%g (tdold=%g, tdlo=%g tdhi=%g tgas=%g tcmb=%g)\n",td, tdold, tdlo, tdhi, gp->tgas, tcmb);
@@ -198,6 +200,7 @@ static inline double calculate_dust_temp(double tgas, double nh, double gasgr, d
             if (td < tcmb) td = tcmb;  // Limit tdust to [tCMB, tgas]
             if (td > tgas) td = tgas;
             if (sol * (sol+dsol) < 0.f) eps *= 0.5f;  // we have passed minimum; reduce eps
+	    if (td > tgas || td < tcmb) break;
             if (++iter > maxiter) {
                 printf("Crackle: Non-convergence in calculate_dust_temp(), returning tdust=%g (tdold=%g, dsol=%g eps=%g slope=%g)\n",td, tdold, dsol, eps, slope);
                 break;
