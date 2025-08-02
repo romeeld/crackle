@@ -106,7 +106,7 @@ static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry,
 
 static inline double dust_thermal_balance(double tdust, double tgas, double tcmb, double tcmb4, double gamma_isrf, double gasgr, double nh)
 {
-        const double kgr1 = 4.e-4;
+        const double kgr1 = 0.0428266; /* dust opacity normalized to local DGR =4.e-4/0.00934 */
         const double kgr200 = 16.f; /* dust-rad coupling at sublimation temp */
         const double tsubl = 1500.f;  /* dust sublimation temperature */
         const double sigma_sb = 5.670373e-5;  /* Stefan-Boltzmann const, in erg/s/cm^2/K^4  */
