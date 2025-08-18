@@ -68,10 +68,22 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	copy_grackle_fields_to_part(p, &gp, chemistry);
 	
 	/* Checking Nan for gp field data*/
-	if (chemistry->use_radiative_transfer){
-		if (has_nan_in_gp(&gp)) {
-    			printf("One or more NaNs found in gp structure before cooling calculation.\n");
-		}
+	//if (chemistry->use_radiative_transfer){
+	//	if (has_nan_in_gp(&gp)) {
+    	//		printf("One or more NaNs found in gp structure before cooling calculation.\n");
+	//	}
+	//}
+	
+	if (chemistry->use_radiative_transfer) {
+    		FILE *logfile = fopen("gp_nan_log.txt", "a");
+    		if (!logfile) perror("Failed to open log file");
+
+    		int fixed = fix_nan_in_gp(&gp, logfile);
+    		if (fixed > 0) {
+        		printf("%d NaN values replaced with 0 in gp structure.\n", fixed);
+    		}
+
+    		if (logfile) fclose(logfile);
 	}
 
 	/* Set up various unit conversions etc */

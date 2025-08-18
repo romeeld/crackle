@@ -88,6 +88,92 @@ bool has_nan_in_gp(const grackle_part_data *gp) {
     #undef CHECK_NAN
 }
 
+int fix_nan_in_gp(grackle_part_data *gp, FILE *logfile) {
+    int count = 0;
+
+    #define FIX_NAN(field) \
+        if (isnan(gp->field)) { \
+            gp->field = 0.0; \
+            count++; \
+            if (logfile) fprintf(logfile, "NaN fixed in gp->%s\n", #field); \
+        }
+
+    FIX_NAN(density);
+    FIX_NAN(HI_density);
+    FIX_NAN(HII_density);
+    FIX_NAN(HM_density);
+    FIX_NAN(HeI_density);
+    FIX_NAN(HeII_density);
+    FIX_NAN(HeIII_density);
+    FIX_NAN(H2I_density);
+    FIX_NAN(H2II_density);
+    FIX_NAN(DI_density);
+    FIX_NAN(DII_density);
+    FIX_NAN(HDI_density);
+    FIX_NAN(e_density);
+    FIX_NAN(metal_density);
+    FIX_NAN(internal_energy);
+    FIX_NAN(x_velocity);
+    FIX_NAN(y_velocity);
+    FIX_NAN(z_velocity);
+    FIX_NAN(volumetric_heating_rate);
+    FIX_NAN(specific_heating_rate);
+    FIX_NAN(temperature_floor);
+    FIX_NAN(RT_heating_rate);
+    FIX_NAN(RT_HI_ionization_rate);
+    FIX_NAN(RT_HeI_ionization_rate);
+    FIX_NAN(RT_HeII_ionization_rate);
+    FIX_NAN(RT_H2_dissociation_rate);
+    FIX_NAN(H2_self_shielding_length);
+    FIX_NAN(H2_custom_shielding_factor);
+    FIX_NAN(isrf_habing);
+    FIX_NAN(dust_density);
+    FIX_NAN(SNe_density);
+    FIX_NAN(tdust);
+
+    FIX_NAN(edot);
+    FIX_NAN(edot_ext);
+    FIX_NAN(dedot);
+    FIX_NAN(HIdot);
+    FIX_NAN(fSShHI);
+    FIX_NAN(fSShHeI);
+    FIX_NAN(fSShHeII);
+    FIX_NAN(rhoH);
+    FIX_NAN(rhoHe);
+    FIX_NAN(rhoH2);
+    FIX_NAN(mmw);
+    FIX_NAN(tgas);
+    FIX_NAN(logtem);
+    FIX_NAN(delta_HI);
+    FIX_NAN(delta_HII);
+    FIX_NAN(delta_HeI);
+    FIX_NAN(delta_HeII);
+    FIX_NAN(delta_HeIII);
+    FIX_NAN(delta_HM);
+    FIX_NAN(delta_H2I);
+    FIX_NAN(delta_H2II);
+    FIX_NAN(delta_e);
+
+    for (int i = 0; i < NUM_METAL_SPECIES_GRACKLE; i++) {
+        if (isnan(gp->gas_metalDensity[i])) {
+            gp->gas_metalDensity[i] = 0.0;
+            count++;
+            if (logfile) fprintf(logfile, "NaN fixed in gp->gas_metalDensity[%d]\n", i);
+        }
+        if (isnan(gp->dust_metalDensity[i])) {
+            gp->dust_metalDensity[i] = 0.0;
+            count++;
+            if (logfile) fprintf(logfile, "NaN fixed in gp->dust_metalDensity[%d]\n", i);
+        }
+    }
+
+    if (count > 0 && logfile) {
+        fprintf(logfile, "Total NaNs fixed in this gp structure: %d\n", count);
+    }
+
+    return count;
+}
+
 static inline void set_crackle_units(code_units *units, chemistry_data_storage grackle_rates, double gamma, crackle_units *cunits) {
                 /* Set units */
         cunits->dom      = units->density_units/mh; // converts to equivalent physical H number density
