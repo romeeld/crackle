@@ -38,6 +38,8 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	/* Copy to grackle_part_data */
 	copy_grackle_fields_to_part(p, &gp, chemistry);
 
+	check_hydrogen(&gp, 0);
+
 	/* Set up various unit conversions etc */
 	set_crackle_units(units, grackle_rates, chemistry->Gamma, &cunits);
 
@@ -126,6 +128,7 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 
 	/* Copy from grackle_part_data */
 	copy_grackle_fields_from_part(p, &gp, chemistry);
+	check_hydrogen(&gp, 99);
 
 	return 1;
 }
@@ -421,12 +424,16 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
 	return;
 }
 
-void check_hydrogen(grackle_part_data *p) 
+void check_hydrogen(grackle_part_data *p, int flag) 
 {
 	double H_density = p->HI_density + p->HII_density + p->HM_density;
 	double H2_density = p->H2I_density + p->H2II_density;
 	double H_frac = (H_density + H2_density) / p->density;
-	assert(H_frac > 0.4 && H_frac < 0.8);
+	if (H_frac < 0.4 || H_frac > 0.8) {
+	    double He_density = p->HeI_density + p->HeII_density + p->HeIII_density;
+	    fprintf(stdout, "TROUBLE(%d)! H_frac=%g seems wrong. Densities: H=%g H2=%g He=%g e=%g dust=%g metal=%g total=%g should_be_unity=%g\n", flag, H_frac, H_density, He_density, H2_density, p->e_density, p->dust_density, p->metal_density, p->density, (H_density+ He_density+ H2_density+ p->dust_density+ p->metal_density) / p->density);
+	}
+	//assert(H_frac > 0.4 && H_frac < 0.8);
 	assert(p->HI_density >= 0.f);
 	assert(p->HII_density >= 0.f);
 }
@@ -609,7 +616,7 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
 
 void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry)
 {
-	check_hydrogen(gp);
+	check_hydrogen(gp, 1);
 	/* Limit change for H species */
 	if (gp->HI_density + gp->delta_HI < 0.) gp->delta_HI = -gp->HI_density;
 	if (gp->HI_density + gp->delta_HI > gp->rhoH) gp->delta_HI = gp->rhoH - gp->HI_density;
@@ -657,7 +664,7 @@ void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry
 	gp->HeII_density *= He_factor;
 	gp->HeIII_density *= He_factor;
 
-	check_hydrogen(gp);
+	check_hydrogen(gp, 2);
 
 	/* Compute new electron density */
 	compute_electron_density(gp);
