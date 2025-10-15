@@ -68,23 +68,23 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	copy_grackle_fields_to_part(p, &gp, chemistry);
 	
 	/* Checking Nan for gp field data*/
-	//if (chemistry->use_radiative_transfer){
-	//	if (has_nan_in_gp(&gp)) {
-    	//		printf("One or more NaNs found in gp structure before cooling calculation.\n");
-	//	}
-	//}
-	
-	if (chemistry->use_radiative_transfer) {
-    		FILE *logfile = fopen("gp_nan_log.txt", "a");
-    		if (!logfile) perror("Failed to open log file");
-
-    		int fixed = fix_nan_in_gp(&gp, logfile);
-    		if (fixed > 0) {
-        		printf("%d NaN values replaced with 0 in gp structure.\n", fixed);
-    		}
-
-    		if (logfile) fclose(logfile);
+	if (chemistry->use_radiative_transfer){
+		if (has_nan_in_gp(&gp)) {
+    			printf("One or more NaNs found in gp structure before cooling calculation.\n");
+		}
 	}
+	
+	//if (chemistry->use_radiative_transfer) {
+    	//	FILE *logfile = fopen("gp_nan_log.txt", "a");
+    	//	if (!logfile) perror("Failed to open log file");
+
+    	//	int fixed = fix_nan_in_gp(&gp, logfile);
+    	//	if (fixed > 0) {
+        //		printf("%d NaN values replaced with 0 in gp structure.\n", fixed);
+    	//	}
+
+    	//	if (logfile) fclose(logfile);
+	//}
 
 	/* Set up various unit conversions etc */
 	set_crackle_units(units, grackle_rates, chemistry->Gamma, &cunits);
@@ -213,7 +213,7 @@ void evolve_internal_energy(grackle_part_data *gp, chemistry_data *chemistry, do
 	gp->internal_energy += gp->edot / gp->density * dtit;
 	/* Limits -- don't let u change by more than accuracy level in a single iteration */
 	if (gp->internal_energy < (1.-chemistry->accuracy) * u_prev) gp->internal_energy = (1.-chemistry->accuracy) * u_prev;
-	if (gp->internal_energy > (1.+chemistry->accuracy) * u_prev) gp->internal_energy = (1.+chemistry->accuracy) * u_prev;
+	//if (gp->internal_energy > (1.+chemistry->accuracy) * u_prev) gp->internal_energy = (1.+chemistry->accuracy) * u_prev;
 	if (gp->internal_energy < gp->u_cmb) gp->internal_energy = gp->u_cmb;
 
 	return;
@@ -299,7 +299,7 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	gp->edot += edot_comp;
 
 	/* Photoheating from radiative transfer */
-	if (chemistry->use_radiative_transfer && gp->RT_heating_rate > tiny) {
+	if (chemistry->use_radiative_transfer && gp->RT_heating_rate > 1.e-35) {
 	    edot_rt += gp->RT_heating_rate * gp->HI_density * cunits.dom_inv * cunits.coolunit_inv;
 	    
 	    // === NaN Check ===
@@ -346,7 +346,12 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	}
 	gp->edot += edot_ext;
 	gp->edot_ext += edot_ext;
-
+	
+	//printf("edot_rt=%e, RT_heating_rate=%e, HI_density=%e, dom_inv=%e, coolunit_inv=%e\n",
+        //       edot_rt, gp->RT_heating_rate, gp->HI_density, cunits.dom_inv, cunits.coolunit_inv);
+	//fflush(stdout);
+	//printf("edot: %g pr=%g h2=%g gr=%g uvb=%g pe=%g ed=%g co=%g rt=%g h2h=%g ext=%g met=%g\n",gp->edot, edot_prim , edot_h2 , edot_gasgr , edot_uvb, edot_pe , edot_edust , edot_comp , edot_rt , edot_h2heat , edot_ext , edot_metal);
+	//fflush(stdout);
 	//gp->edot = edot_prim + edot/_h2 + edot_gasgr + edot_uvb + edot_pe + edot_edust + edot_comp + edot_rt + edot_h2heat + edot_ext + edot_metal;
 	if (gp->verbose) {
 	    printf("edot: %g pr=%g h2=%g gr=%g uvb=%g pe=%g ed=%g co=%g rt=%g h2h=%g ext=%g met=%g\n",gp->edot, edot_prim , edot_h2 , edot_gasgr , edot_uvb, edot_pe , edot_edust , edot_comp , edot_rt , edot_h2heat , edot_ext , edot_metal); 
@@ -378,7 +383,7 @@ double compute_dedot(int chemistry_flag, grackle_part_data gp, chemistry_data *c
 		+ 0.25 * my_rates.k26shield * gp.HeI_density;
 	}
 	/* RT photoionization */
-	if (chemistry->use_radiative_transfer && gp.RT_heating_rate > tiny) {
+	if (chemistry->use_radiative_transfer && gp.RT_heating_rate > 1.e-35) {
 	    dedot += gp.RT_HI_ionization_rate * gp.HI_density + 0.25 * (gp.RT_HeI_ionization_rate * gp.HeI_density + gp.RT_HeII_ionization_rate * gp.HeII_density);
 	}
 

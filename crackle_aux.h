@@ -43,7 +43,7 @@ bool has_nan_in_gp(const grackle_part_data *gp) {
     CHECK_NAN(RT_HeII_ionization_rate);
     CHECK_NAN(RT_H2_dissociation_rate);
     CHECK_NAN(H2_self_shielding_length);
-    CHECK_NAN(H2_custom_shielding_factor);
+    //CHECK_NAN(H2_custom_shielding_factor);
     CHECK_NAN(isrf_habing);
     CHECK_NAN(dust_density);
     CHECK_NAN(SNe_density);
