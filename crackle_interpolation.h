@@ -6,7 +6,7 @@
 #include "phys_constants.h"
 
 
-static inline void compute_self_shielded_rates(grackle_part_data *gp, chemistry_data *chemistry, chemistry_rate_storage *my_rates, photo_rate_storage my_uvb_rates, crackle_units cunits) {
+static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry_data *chemistry, chemistry_rate_storage *my_rates, photo_rate_storage my_uvb_rates, crackle_units cunits) {
 
 	my_rates->k24 = my_rates->k25 = my_rates->k26 =
 		my_rates->k27 = my_rates->k28 = my_rates->k29 =
@@ -47,7 +47,7 @@ static inline void compute_self_shielded_rates(grackle_part_data *gp, chemistry_
 	my_rates->k31shield = my_rates->k31;
 
 	/* No self-shielding, so no changes to rates */
-	if (chemistry->self_shielding_method == 0 || chemistry->UVbackground == 0) return;
+	if (chemistry->self_shielding_method == 0 || (chemistry->UVbackground == 0 && chemistry->use_radiative_transfer == 0)) return 1.f;
 
         /* We have self-shielding! */
         /* HI self-shielding factor */
@@ -84,7 +84,7 @@ static inline void compute_self_shielded_rates(grackle_part_data *gp, chemistry_
 	}
 
 	/* Set up H2 self-shielding */
-	double l_H2shield;
+	double l_H2shield, f_shield = 1.;
 	if (chemistry->H2_self_shielding > 0 && chemistry->H2_custom_shielding != 1) {
 	    if (chemistry->H2_custom_shielding > 0) {
 	        l_H2shield = gp->H2_self_shielding_length * cunits.length_to_cgs; // user specifies the H2 shielding length
@@ -103,10 +103,9 @@ static inline void compute_self_shielded_rates(grackle_part_data *gp, chemistry_
                     (-0.9639 * log10(tgas_touse) + 3.892);
                 const double x = 2.e-15 * N_H2;
                 const double b_doppler = 1.e-5 * sqrt(2. * kboltz * gp->tgas / mh);
-                const double f_shield = 0.965 / pow(1. + x/b_doppler, aWG2019) +
+                const double fH2_shield = 0.965 / pow(1. + x/b_doppler, aWG2019) +
                     0.035 * exp(-8.5e-4 * sqrt(1. + x)) / sqrt(1. + x);
-
-	        my_rates->k31shield *= min(f_shield, 1.);
+		f_shield = min(fH2_shield, 1.);
 	    }
 	    else if (chemistry->H2_self_shielding == 4) {  
 	        // H+H2 self-shielding from Schauer+15 eq 8,9
@@ -118,14 +117,18 @@ static inline void compute_self_shielded_rates(grackle_part_data *gp, chemistry_
     	        const double xH2 = NH2_cgs / 8.465e13;
     	        const double fH2_shield = 0.9379/pow(1.f+xH2/DH2_cgs,1.879) + 0.03465/pow(1.f+xH2,0.473) * exp(-2.293e-4*sqrt(1+xH2));
 
-	        my_rates->k31shield *= min(fH_shield, 1.) * min(fH2_shield, 1.);
+	        f_shield = min(fH_shield, 1.) * min(fH2_shield, 1.);
 		//if (gp->verbose) printf("k31: %g %g %g %g %g %g %g\n",my_rates->k31shield, NH_cgs, NH2_cgs, gp->nH, gp->rhoH2/mh, fH_shield, fH2_shield);
 	    }
 	}
 	if (chemistry->H2_self_shielding > 0 && chemistry->H2_custom_shielding == 1) {
 	    // user specifies the H2 shielding factor directly
-	    my_rates->k31shield *= gp->H2_custom_shielding_factor;
+	    f_shield = gp->H2_custom_shielding_factor;
 	}
+
+	my_rates->k31shield *= f_shield;
+
+	return f_shield;
 }
 
 static inline void init_temperature_interpolation(grackle_part_data *gp, chemistry_data *chemistry, interp_struct *interpolation, crackle_units cunits, chemistry_data_storage gr)

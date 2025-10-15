@@ -86,6 +86,7 @@ typedef struct
   cr_float H2_custom_shielding_factor;
 
   cr_float isrf_habing;
+  cr_float f_shield;
 
   /* Individual metal+dust species stored in arrays 
    * Species order [0-9]: He, C, N, O, Ne, Mg, Si, D, Ca, Fe */
@@ -322,7 +323,7 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 
 void evolve_internal_energy(grackle_part_data *gp, chemistry_data *chemistry, double dtit);
 
-void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_data_storage rates_table, chemistry_rate_storage *my_rates, photo_rate_storage uvb_rates, interp_struct *interpolation, code_units *units, crackle_units cunits);
+void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_data_storage rates_table, chemistry_rate_storage *my_rates, photo_rate_storage uvb_rates, interp_struct *interpolation, code_units *units, crackle_units cunits, int ism_flag);
 
 double compute_dedot(int chemistry_flag, grackle_part_data gp, chemistry_data *chemistry, chemistry_rate_storage my_rates, code_units *units);
 

@@ -5,6 +5,22 @@
 #include <string.h>
 #include <assert.h>
 
+static inline int check_hydrogen(grackle_part_data *p, int flag)
+{
+        double H_density = p->HI_density + p->HII_density + p->HM_density;
+        double H2_density = p->H2I_density + p->H2II_density;
+        double H_frac = (H_density + H2_density) / p->density;
+        if (H_frac < 0.4 || H_frac > 0.8) {
+            double He_density = p->HeI_density + p->HeII_density + p->HeIII_density;
+            fprintf(stdout, "TROUBLE(%d)! H_frac=%g seems wrong. Densities: H=%g H2=%g He=%g e=%g dust=%g metal=%g total=%g should_be_unity=%g\n", flag, H_frac, H_density, He_density, H2_density, p->e_density, p->dust_density, p->metal_density, p->density, (H_density+ He_density+ H2_density+ p->dust_density+ p->metal_density) / p->density);
+            return -1;
+        }
+        assert(H_frac > 0.4 && H_frac < 0.8);
+        assert(p->HI_density >= 0.f);
+        assert(p->HII_density >= 0.f);
+        return 0;
+}
+
 static inline void set_crackle_units(code_units *units, chemistry_data_storage grackle_rates, double gamma, crackle_units *cunits) {
                 /* Set units */
         cunits->dom      = units->density_units/mh; // converts to equivalent physical H number density
@@ -102,6 +118,10 @@ static inline int apply_temperature_bounds(grackle_part_data *gp, chemistry_data
 static inline void copy_grackle_fields_to_part(grackle_field_data *p, grackle_part_data *gp, chemistry_data *chemistry) 
 {
 
+	/* initialize evolved quantities */
+	gp->edot = gp->edot_ext = gp->dedot = gp->HIdot = gp->fSShHI = gp->fSShHeI = gp->fSShHeII = gp->rhoH = gp->rhoHe = gp->rhoH2 = gp->mmw = gp->tgas = gp->logtem = gp->delta_HI = gp->delta_HII = gp->delta_HeI = gp->delta_HeII = gp->delta_HeIII = gp->delta_HM = gp->delta_H2I = gp->delta_H2II = gp->delta_e = 0.;
+	gp->tdust = -1.;  // initialize to negative value so it makes an initial guess
+
 	gp->grid_rank = p->grid_rank;
 	gp->grid_dimension = p->grid_dimension[0];
 	gp->grid_start = p->grid_start[0];
@@ -122,6 +142,7 @@ static inline void copy_grackle_fields_to_part(grackle_field_data *p, grackle_pa
 	    gp->H2I_density = 0.;
 	    gp->H2II_density = 0.;
 	}
+
 	if (chemistry->primordial_chemistry >= 3) {
 	    printf("Crackle does not currently work with primordial_chemistry >=3, sorry!\n");
 	    return;
@@ -208,11 +229,7 @@ static inline void copy_grackle_fields_to_part(grackle_field_data *p, grackle_pa
 	    }
 	}
 
-	/* initialize evolved quantities */
-	gp->edot = gp->edot_ext = gp->dedot = gp->HIdot = gp->fSShHI = gp->fSShHeI = gp->fSShHeII = gp->rhoH = gp->rhoHe = gp->rhoH2 = gp->mmw = gp->tgas = gp->logtem = gp->delta_HI = gp->delta_HII = gp->delta_HeI = gp->delta_HeII = gp->delta_HeIII = gp->delta_HM = gp->delta_H2I = gp->delta_H2II = gp->delta_e = 0.;
-	gp->tdust = -1.;  // initialize to negative value so it makes an initial guess
 	gp->verbose = 0;
-
 }
 
 static inline void copy_grackle_fields_from_part(grackle_field_data *p, grackle_part_data *gp, chemistry_data *chemistry) 
