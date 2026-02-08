@@ -17,6 +17,7 @@ typedef struct
   double edot_ext;
   double dedot;
   double HIdot;
+  double H2Idot;
   double fSShHI;
   double fSShHeI;
   double fSShHeII;
@@ -329,7 +330,7 @@ double compute_dedot(int chemistry_flag, grackle_part_data gp, chemistry_data *c
 
 double compute_HIdot(int chemistry_flag, grackle_part_data gp, chemistry_data *chemistry, chemistry_rate_storage my_rates, code_units *units);
 
-double compute_iteration_dt(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, double dt, double dtcool, double *dtsuppress);
+double compute_iteration_dt(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, double dt, double dtcool, float accuracy, double *dtsuppress);
 
 void evolve_helium(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, chemistry_rate_storage my_rates, double dtit);
 

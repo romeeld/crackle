@@ -51,7 +51,7 @@ static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry,
 		const double Ms100 = SN_dust_destr_rate * tdyn * SolarMass / (mass_unit * chemistry->dust_destruction_eff);  // dust mass destroyed per SN, in code units
                 f_shocked = min((Ms100 * gp->SNe_density) / rhogas, 1.);  // fraction of mass shock-heated
                 drhos = gp->dust_density * f_shocked * chemistry->dust_destruction_eff;  // some fraction of dust is destroyed in shocked gas
-	if (gp->verbose) printf("dust: %g %g %g %g %g %g %g\n",gp->dust_density, Ms100 * mass_unit * chemistry->dust_destruction_eff / SolarMass, tdyn, dens_cgs, f_shocked, drhos, (gp->metal_density/(gp->metal_density+gp->dust_density)) * (gp->dust_density/tau_accr) * dtit);
+	//if (gp->verbose) printf("dust: %g %g %g %g %g %g %g\n",gp->dust_density, Ms100 * mass_unit * chemistry->dust_destruction_eff / SolarMass, tdyn, dens_cgs, f_shocked, drhos, (gp->metal_density/(gp->metal_density+gp->dust_density)) * (gp->dust_density/tau_accr) * dtit);
 	    }
 	    /* sputtering */
 	    if (gp->tgas > T_SPUTTERING || !ism_flag) {  // negligibly small below this temperature
@@ -94,7 +94,7 @@ static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry,
 	    /* Add up new dust densities */
 	    gp->dust_density += gp->dust_metalDensity[k];
         }
-	if (gp->verbose) printf("dust: dtit=%g tau_accr=%g tau_sput=%g snerho=%g drhos=%g rhog=%g td=%g tg=%g dust=%g\n",dtit,tau_accr0,tau_sput/3.,gp->SNe_density,drhos,gp->density,gp->tdust,gp->tgas,gp->dust_density);
+	//if (gp->verbose) printf("dust: dtit=%g tau_accr=%g tau_sput=%g snerho=%g drhos=%g rhog=%g td=%g tg=%g dust=%g\n",dtit,tau_accr0,tau_sput/3.,gp->SNe_density,drhos,gp->density,gp->tdust,gp->tgas,gp->dust_density);
 	//assert(gp->dust_density == gp->dust_density);
 	//assert(gp->metal_density >= 0.);
 	//assert(gp->dust_metalDensity[0] == 0.); // He should not participate in dust (nor N, Ne)
@@ -164,7 +164,7 @@ static inline void calculate_tdust_bisect(grackle_part_data *gp, double gasgr, d
             tdold = td;
 	    td = 0.5 * (tdlo + tdhi);  // new guess
             sol = dust_thermal_balance(td, gp->tgas, tcmb, tcmb4, gamma_isrf, gasgr, gp->nH);
-            if (gp->verbose) printf("sol: td=%g tg=%g sol=%g tdold=%g %g %g\n",td, gp->tgas, sol, tdold, tdlo, tdhi);
+            //if (gp->verbose) printf("sol: td=%g tg=%g sol=%g tdold=%g %g %g\n",td, gp->tgas, sol, tdold, tdlo, tdhi);
 	    if (sol > 0) tdlo = td;  // heating, so tdust should increase
 	    else tdhi = td;
 	    if (fabs(tdhi-tdlo) < tol * (tdhi+tdlo) || tdlo > tdhi) break;

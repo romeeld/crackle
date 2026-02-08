@@ -55,7 +55,7 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	if (gp.isrf_habing < 0.) gp.isrf_habing = 0.;
 
 	while (dtcool < dt) {
-	    //if (gp.density > 2.e9) gp.verbose=1;
+	    //if (ism_flag && gp.H2I_density/gp.density < 1.e-2 && gp.nH > 30.) gp.verbose=1;
 	    /* Retain previous iteration particle info */
 	    memmove(&gp_old, &gp, sizeof(gp)); 
 	    /* Set up cooling/heating rates interpolation */
@@ -94,7 +94,9 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	    gp.HIdot = compute_HIdot(chemistry->primordial_chemistry, gp, chemistry, my_rates, units); 
 	    gp.dedot = compute_dedot(chemistry->primordial_chemistry, gp, chemistry, my_rates, units); 
 	    /* Set the timestep for this iteration (lowering rates if they are too large) */
-	    dtit = compute_iteration_dt(&gp, &gp_old, chemistry, dt, dtcool, &dtsuppress);
+	    float accuracy = chemistry->accuracy;
+	    if (ism_flag) accuracy = 0.5f;
+	    dtit = compute_iteration_dt(&gp, &gp_old, chemistry, dt, dtcool, accuracy, &dtsuppress);
 
 	    /* Evolve all quantities */
 	    evolve_hydrogen(&gp, &gp, chemistry, my_rates, dtit);  
@@ -108,7 +110,7 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	    dtcool += dtit;
 	    iter ++;
 
-	    if (gp.verbose) printf("iter: i=%d dt=%g nh=%g e=%g de=%g HI=%g HII=%g H2I=%g HeI=%g HeII=%g dust=%g T=%g Td=%g\n", iter, dtit, gp.rhoH * units->density_units / mh, gp.internal_energy, gp.e_density, gp.HI_density/gp.density, gp.HII_density/gp.density, gp.H2I_density/gp.density, gp.HeI_density/gp.density, gp.HeII_density/gp.density, gp.dust_density/gp.density, gp.tgas, gp.tdust);
+	    if (gp.verbose) printf("iter: i=%d dt=%g fdt=%g nh=%g e=%g de=%g HI=%g HII=%g H2I=%g HeI=%g HeII=%g dust=%g T=%g Td=%g\n", iter, dtit, dtcool/dt, gp.rhoH * units->density_units / mh, gp.internal_energy, gp.e_density, gp.HI_density/gp.density, gp.HII_density/gp.density, gp.H2I_density/gp.density, gp.HeI_density/gp.density, gp.HeII_density/gp.density, gp.dust_density/gp.density, gp.tgas, gp.tdust);
 	    if (gp.verbose) printf("rates: i=%d fdt=%g edot=%g dedot=%g HIdot=%g T=%g n=%g\n",iter, dtit/dt, gp.edot, gp.dedot, gp.HIdot, gp.tgas, gp.density*units->density_units/mh );
 	    
 	    /* Check for convergence or too many iterations */
@@ -117,11 +119,12 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 		&& fabs(gp_old.HI_density - gp.HI_density) < CONVERGENCE * fmax(gp_old.HI_density, MINFRAC*gp_old.density)
 		&& fabs(gp_old.e_density - gp.e_density) < CONVERGENCE * fmax(gp_old.e_density, MINFRAC*gp_old.density) ) break;
 	    if (iter > chemistry->max_iterations) break;
-	    gp.verbose = 0;
 	}
 
-	/* If there is time left over, need to form/destroy dust over the full timestep */
+	/* If there is time left over, need to form/destroy H2 and dust over the full timestep */
 	if (dtcool < dt && chemistry->primordial_chemistry >= 2) {
+	    iter = chemistry->max_iterations;
+	    evolve_hydrogen(&gp, &gp, chemistry, my_rates, dt - dtcool);  
 	    evolve_H2(&gp, ism_flag, chemistry, my_rates, cunits, dt - dtcool); 
 	    evolve_elements(&gp, &gp_old, chemistry);
 	}
@@ -134,19 +137,26 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	return 1;
 }
 
-double compute_iteration_dt(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, double dt, double dtcool, double *dtsuppress)
+double compute_iteration_dt(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, double dt, double dtcool, float accuracy, double *dtsuppress)
 {
 	/* Calculate timesteps for each tracked quantity */
 	const double dt_e = fabs( gp->internal_energy * gp->density / (gp->edot + tiny) );
 	const double dt_de = fabs( fmax(gp->e_density, MINFRAC*gp->density) / (gp->dedot + tiny) );
 	const double dt_HI = fabs( fmax(gp->HI_density, MINFRAC*gp->density) / (gp->HIdot + tiny) );
+	double dt_H2 = FLT_MAX;
+	if (chemistry->primordial_chemistry >= 2) {
+	    dt_H2 = fabs( fmax(gp->H2I_density, MINFRAC*gp->density) / (gp->H2Idot + tiny) );
+	}
 
 	/* If thermal equilbirium is passed, attenuate the timestep to help it converge */
 	if (gp->edot * gp_old->edot < 0.f) *dtsuppress *= 0.5;
-	else *dtsuppress *= (1. + 0.5*chemistry->accuracy);  // asymmetric wrt the reduction to avoid oscillations
+	else *dtsuppress *= (1. + chemistry->accuracy);  // asymmetric wrt the reduction to avoid oscillations
 
 	/* Compute the timestep for this iteration */
 	double dtit = chemistry->accuracy * *dtsuppress * fmin(fmin(dt_de, dt_HI), dt_e);
+	if (chemistry->primordial_chemistry >= 2) {
+	    dtit = fmin(dtit, chemistry->accuracy * dt_H2);
+	}
 
 	/* Limit dtit if we will reach end of timestep this iteration */
 	if (dtit > dt - dtcool) {
@@ -192,6 +202,10 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	edot_prim -= my_rates->brem*(gp->HII_density+0.25*gp->HeII_density+gp->HeIII_density)*gp->e_density;
 	gp->edot += edot_prim;
 
+	/* Calculate self-shielding */
+	gp->f_shield = compute_self_shielded_rates(gp, chemistry, my_rates, my_uvb_rates, cunits);
+	if (ism_flag == 0) gp->f_shield = 1.f;
+
 	/* Add H2 cooling (Glover & Abel 2008); fudge at extreme density NOT included */
 	if (chemistry->primordial_chemistry >= 2) {
 	    H2_cooling_rates(interpolation, grackle_rates, my_rates);
@@ -207,7 +221,7 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	        double gasgr_tdust = chemistry->local_dust_to_gas_ratio * gasgr * cunits.coolunit / mh;
 	        /* Get dust rates */
 	        //gp->tdust = calculate_dust_temp(gp->tgas, gp->nH, gasgr_tdust, grackle_rates.gamma_isrf * gp->isrf_habing, cunits.compton2, gp->tdust); // calc_tdust_1d_g()
-	        calculate_tdust_bisect(gp, gasgr_tdust, grackle_rates.gamma_isrf * gp->isrf_habing, cunits.compton2);
+	        calculate_tdust_bisect(gp, gasgr_tdust, grackle_rates.gamma_isrf * gp->isrf_habing * gp->f_shield, cunits.compton2);
 		//if(gp->tdust < 2*cunits.compton2) printf("DUST td=%g gasgr=%g tcmb=%g isrf=%g\n",gp->tdust, gasgr_tdust, cunits.compton2, gp->isrf_habing);
 	        /* Gas-dust grain heat transfer rate */
 	        dust_species_rates(gp->tdust, gp->dust2gas, chemistry, grackle_rates, my_rates, interpolation);
@@ -218,9 +232,7 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	    }
 	}
 
-	/* UVB heating and shielding */
-	gp->f_shield = compute_self_shielded_rates(gp, chemistry, my_rates, my_uvb_rates, cunits);
-	if (ism_flag == 0) gp->f_shield = 1.f;
+	/* UVB heating */
 	if (chemistry->UVbackground && gp->grid_end >= 0) {
 	    edot_uvb += cunits.dom_inv * (my_uvb_rates.piHI * gp->fSShHI * gp->HI_density + 0.25 * (my_uvb_rates.piHeI * gp->fSShHeI * gp->HeI_density + my_uvb_rates.piHeII * gp->fSShHeII * gp->HeII_density));
 	    gp->edot += edot_uvb;
@@ -285,7 +297,7 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	gp->edot_ext += edot_ext;
 
 	//gp->edot = edot_prim + edot/_h2 + edot_gasgr + edot_uvb + edot_pe + edot_edust + edot_comp + edot_rt + edot_h2heat + edot_ext + edot_metal;
-	if (gp->verbose) {
+	if (gp->verbose && 0) {
 	    printf("edot: %g pr=%g h2=%g gr=%g uvb=%g pe=%g ed=%g co=%g rt=%g h2h=%g ext=%g met=%g\n",gp->edot, edot_prim , edot_h2 , edot_gasgr , edot_uvb, edot_pe , edot_edust , edot_comp , edot_rt , edot_h2heat , edot_ext , edot_metal); 
 	    fflush(stdout);
 	}
@@ -529,10 +541,11 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
 
 	/* H2 immediately destroyed outside ISM and returned to atomic H */
 	if (ism_flag == 0) {
-	    if (p->rhoH2 > 0.) {
+	    if (p->rhoH2 > 0.f) {
 	        p->HI_density += p->H2I_density + p->HM_density;
 	        p->HII_density += p->H2II_density;
-	        p->H2I_density = p->H2II_density = p->HM_density = 0.;  
+	        p->H2I_density = p->H2II_density = p->HM_density = 0.f;  
+	        p->H2Idot = 0.f;
 	        compute_electron_density(p);
 	    }
 	    return;
@@ -577,7 +590,7 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
 	dep = p->e_density + p->delta_e;
 	if (chemistry->UVbackground > 0) {
 	    p->delta_H2II = 2.f * (my_rates.k9 * HIp * HIIp +
-		0.5 * my_rates.k11 * H2Ip * HIIp +
+		0.5f * my_rates.k11 * H2Ip * HIIp +
 		my_rates.k17 * HMp * HIIp +
 		my_rates.k29shield * H2Ip) / 
 		(my_rates.k10 * HIp + my_rates.k18 * dep +
@@ -586,7 +599,7 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
 	}
 	else {
 	    p->delta_H2II = 2.f * (my_rates.k9 * HIp * HIIp +
-		0.5 * my_rates.k11 * H2Ip * HIIp +
+		0.5f * my_rates.k11 * H2Ip * HIIp +
 		my_rates.k17 * HMp * HIIp) / 
 		(my_rates.k10 * HIp + my_rates.k18 * dep +
 		my_rates.k19 * HMp)
@@ -599,6 +612,9 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
 	    assert(p->delta_H2I == p->delta_H2I);
 	    assert(p->delta_H2II == p->delta_H2II);
 	}*/
+
+	p->H2Idot = p->delta_H2I / dtit;
+
 	return;
 }
 
@@ -606,6 +622,7 @@ void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry
 {
 	check_hydrogen(gp, 1);
 	/* Limit change for H species */
+	if (gp->verbose) fprintf(stdout,"evolve: nH=%g rho=%g HI=%g %g  HII=%g %g  H2=%g %g\n",gp->nH,gp->density,gp->HI_density,gp->delta_HI,gp->HII_density,gp->delta_HII,gp->H2I_density,gp->delta_H2I);
 	if (gp->HI_density + gp->delta_HI < 0.) gp->delta_HI = -gp->HI_density;
 	if (gp->HI_density + gp->delta_HI > gp->rhoH) gp->delta_HI = gp->rhoH - gp->HI_density;
 	if (gp->HII_density + gp->delta_HII < 0.) gp->delta_HII = -gp->HII_density;
@@ -718,9 +735,7 @@ void crackle_cooling_time(grackle_field_data *p, chemistry_data *chemistry, chem
 	int ism_flag = (gp->isrf_habing >= 0.);
 	if (gp->isrf_habing < 0.) gp->isrf_habing = 0.;
 	/* Compute rate of change of thermal energy */
-	gp->verbose = 0;
 	compute_edot(gp, chemistry, grackle_rates, &my_rates, my_uvb_rates, &interpolation, units, cunits, ism_flag);  
-	gp->verbose = 0;
 
 	*tcool = gp->internal_energy * gp->density / (gp->edot+tiny);
 	return;
