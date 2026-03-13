@@ -175,6 +175,20 @@ void evolve_internal_energy(grackle_part_data *gp, chemistry_data *chemistry, do
 	if (gp->internal_energy > HEATLIM * u_prev) gp->internal_energy = HEATLIM * u_prev;
 	if (gp->internal_energy < gp->u_cmb) gp->internal_energy = gp->u_cmb;
 
+	const double du = gp->edot / gp->density * dtit;
+
+	if (gp->internal_energy > 5e4 || du > 1e4) {
+    		printf("HOT PARTICLE\n");
+    		printf("u_prev = %g\n", u_prev);
+    		printf("edot = %g\n", gp->edot);
+    		printf("density = %g\n", gp->density);
+    		printf("dt = %g\n", dtit);
+    		printf("du = %g\n", du);
+    		printf("HI_frac = %g\n", gp->HI_density / gp->density);
+    		printf("RT_heating_rate = %g\n", gp->RT_heating_rate);
+    		printf("\n");
+	}
+
 	return;
 }
 
@@ -262,9 +276,12 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 
 	/* Photoheating from radiative transfer */
 	if (chemistry->use_radiative_transfer && gp->f_shield * gp->RT_heating_rate > FLT_MIN) {
-	    edot_rt += gp->RT_heating_rate * gp->f_shield * gp->HI_density * cunits.dom_inv * cunits.coolunit_inv;
-	    gp->edot += edot_rt;
-	    gp->edot_ext += edot_rt;
+	    double HI_frac = gp->HI_density / gp->density;  // fraction of neutral H
+	    if (HI_frac > 1e-3) {  // only heat if there’s appreciable neutral H
+	    	edot_rt += gp->RT_heating_rate * gp->f_shield * gp->HI_density * cunits.dom_inv * cunits.coolunit_inv;
+	    	gp->edot += edot_rt;
+	    	gp->edot_ext += edot_rt;
+	    }
 	}
 
 	/* H2 heating */
@@ -301,6 +318,11 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	    printf("edot: %g pr=%g h2=%g gr=%g uvb=%g pe=%g ed=%g co=%g rt=%g h2h=%g ext=%g met=%g\n",gp->edot, edot_prim , edot_h2 , edot_gasgr , edot_uvb, edot_pe , edot_edust , edot_comp , edot_rt , edot_h2heat , edot_ext , edot_metal); 
 	    fflush(stdout);
 	}
+
+	if (gp->internal_energy > 5e4) {
+            printf("HOT edot: %g pr=%g h2=%g gr=%g uvb=%g pe=%g ed=%g co=%g rt=%g h2h=%g ext=%g met=%g\n",gp->edot, edot_prim , edot_h2 , edot_gasgr , edot_uvb, edot_pe , edot_edust , edot_comp , edot_rt , edot_h2heat , edot_ext , edot_metal);
+            fflush(stdout);
+        }
 
 	assert(gp->edot==gp->edot && "CRACKLE ERROR: gp->edot is nan.");  // check for NaN
 
