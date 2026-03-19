@@ -29,7 +29,7 @@ static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry,
 	if (ism_flag) {
             tau_ref = chemistry->dust_growth_tauref * 1.e9 * sec_per_year / units->time_units;
             tau_accr0 = tau_ref * (chemistry->dust_growth_densref/dens_cgs) * sqrt(gp->tdust/gp->tgas); 
-            for (k=0; k<NUM_METAL_SPECIES_GRACKLE; k++){
+            for (k=1; k<NUM_METAL_SPECIES_GRACKLE; k++){
 		//gp->dust_metalDensity[k] = fmax(gp->dust_metalDensity[k], tiny);
                 rhomet[k] = gp->gas_metalDensity[k] + gp->dust_metalDensity[k];
                 tau_accr = tau_accr0 * chemistry->SolarAbundances[k] * gp->density / (gp->gas_metalDensity[k]+tiny);
@@ -61,8 +61,8 @@ static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry,
                 //if (tau_sput > 0.) drhos += gp->dust_density / tau_sput * 3.0 * dtit;
                 drhos += gp->dust_density * (1. - exp(-3.* fmin(dtit / tau_sput, 5.)));
 	    }
-	    /* Destruction is applied to all elements, in proportion to their metallicity */
-	    for (k = 0; k < NUM_METAL_SPECIES_GRACKLE; k++) {
+	    /* Destruction is applied to all metals, in proportion to their metallicity */
+	    for (k = 1; k < NUM_METAL_SPECIES_GRACKLE; k++) {
                 drho[k] -= gp->dust_metalDensity[k] / gp->dust_density * drhos;
 	    }
 	}
@@ -70,7 +70,7 @@ static inline void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry,
 	/* Now evolve the dust metal density */
 	gp->dust_density = 0.;
 	double old_dustDensity, old_metalDensity;
-        for (k=0; k<NUM_METAL_SPECIES_GRACKLE; k++){
+        for (k=1; k<NUM_METAL_SPECIES_GRACKLE; k++){
 	    old_dustDensity = gp->dust_metalDensity[k];
 	    old_metalDensity = gp->dust_metalDensity[k] + gp->gas_metalDensity[k];
 	    /* Add to dust metallicity */
@@ -140,8 +140,13 @@ static inline void calculate_tdust_bisect(grackle_part_data *gp, double gasgr, d
 	float td = gp->tdust;
         int iter = 0, maxiter = 100, sol;
 
+	/* Find gas temperature of birth cloud where we assume dust lives, assuming pressure equil with ISM gas */
+	const float nbirthcloud = 1.e5;  // This should be above the threshold density in a lognormal SF model.
+	float tbirthcloud = gp->tgas * gp->nH / nbirthcloud;
+	if (tbirthcloud > gp->tgas) tbirthcloud = gp->tgas;
+	if (tbirthcloud < tcmb) tbirthcloud = tcmb;
         /* If first time, initalize Tdust to some reasonable value */
-        if (gp->tdust <= 0.f) td = dust_thermal_balance(td, gp->tgas, tcmb, tcmb4, gamma_isrf, gasgr, gp->nH); 
+        if (gp->tdust <= 0.f) td = dust_thermal_balance(td, tbirthcloud, tcmb, tcmb4, gamma_isrf, gasgr, nbirthcloud); 
 	/* If Tgas has dropped below Tcmb (though it shouldn't); set Tdust to Tgas */
 	if (gp->tgas < tcmb) {
 	    gp->tdust = gp->tgas;
@@ -154,16 +159,16 @@ static inline void calculate_tdust_bisect(grackle_part_data *gp, double gasgr, d
         /* Set bisection limits */
 	float tdhi = min(gp->tgas, range * gp->tdust);
 	float tdlo = max(tcmb, gp->tdust / range);
-	/* In rare cases Tdust change is so large that it is outside of allowed range; just return Tgas in this case */
+	/* In rare cases Tdust change is so large that it is outside of allowed range; just return Tbirthcloud */
 	if (tdlo >= tdhi) {
-	    gp->tdust = gp->tgas;
+	    gp->tdust = tbirthcloud;
 	    return;
 	}
         /* Solve for Tdust via bisection */
         while (fabs(td-tdold) > tol * td) {
             tdold = td;
 	    td = 0.5 * (tdlo + tdhi);  // new guess
-            sol = dust_thermal_balance(td, gp->tgas, tcmb, tcmb4, gamma_isrf, gasgr, gp->nH);
+            sol = dust_thermal_balance(td, tbirthcloud, tcmb, tcmb4, gamma_isrf, gasgr, nbirthcloud);
             //if (gp->verbose) printf("sol: td=%g tg=%g sol=%g tdold=%g %g %g\n",td, gp->tgas, sol, tdold, tdlo, tdhi);
 	    if (sol > 0) tdlo = td;  // heating, so tdust should increase
 	    else tdhi = td;
@@ -171,7 +176,7 @@ static inline void calculate_tdust_bisect(grackle_part_data *gp, double gasgr, d
 	    if (td > gp->tgas || td < tcmb) break;
             //if (gp->verbose) printf("sol: sol=%g nH=%g td=%g tg=%g tdold=%g %g %g isrf=%g\n",sol, gp->nH, td, gp->tgas, tdold, tdlo, tdhi, gamma_isrf);
             if (++iter > maxiter) {
-                printf("Crackle: Non-convergence in calculate_dust_temp(), returning tdust=%g (tdold=%g, tdlo=%g tdhi=%g tgas=%g tcmb=%g)\n",td, tdold, tdlo, tdhi, gp->tgas, tcmb);
+                printf("Crackle: Non-convergence in calculate_dust_temp(), returning tdust=%g (tdold=%g, tdlo=%g tdhi=%g tgas=%g tbc=%g tcmb=%g)\n",td, tdold, tdlo, tdhi, gp->tgas, tbirthcloud, tcmb);
                 break;
             }
         }
