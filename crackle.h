@@ -28,6 +28,7 @@ typedef struct
   double mmw;
   double tgas;
   double logtem;
+  double tstart;
   double tdust;
   double metallicity;
   double dust2gas;
@@ -42,6 +43,7 @@ typedef struct
   double delta_H2II;
   double delta_e;
   int verbose;
+  int id;
 
   /* Scalar copy of grackle_field_data */
 
@@ -341,6 +343,8 @@ void evolve_H2(grackle_part_data *gp, int ism_flag, chemistry_data *chemistry, c
 void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry);
 
 void evolve_pred_corr(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry);
+
+void save_species_data(grackle_part_data *gp_orig, grackle_part_data *gp_target);
 
 //void evolve_dust(grackle_part_data *gp, chemistry_data *chemistry, code_units *units, int ism_flag, double dtit);
 

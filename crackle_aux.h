@@ -161,6 +161,8 @@ static inline void copy_grackle_fields_to_part(grackle_field_data *p, grackle_pa
 	gp->x_velocity = p->x_velocity[0];
 	gp->y_velocity = p->y_velocity[0];
 	gp->z_velocity = p->z_velocity[0];
+	/* Holds particle ID for debugging */
+	gp->id = (int) p->x_velocity[0];
 	if (chemistry->use_volumetric_heating_rate) gp->volumetric_heating_rate = p->volumetric_heating_rate[0];
 	else gp->volumetric_heating_rate = 0.;
 	if (chemistry->use_specific_heating_rate) gp->specific_heating_rate = p->specific_heating_rate[0];

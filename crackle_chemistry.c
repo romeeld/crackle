@@ -24,14 +24,15 @@
 
 #define MINFRAC 1.e-3
 #define CONVERGENCE 1.e-2
-#define HEATLIM 10.  // max heating factor allowed in a single system timestep
+#define HEATLIM 10.f  // max heating factor allowed in a single system timestep
+#define COOLLIM 0.1f  // max cooling factor allowed in a single system timestep
 
 
 int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, chemistry_data_storage grackle_rates, photo_rate_storage my_uvb_rates, code_units *units, double dt) 
 {
 	int iter=0;
 	double dtit=0., dtcool=0., dtsuppress=1.; 
-	grackle_part_data gp, gp_old;
+	grackle_part_data gp, gp_old, gp_species;
 	chemistry_rate_storage my_rates;  // interpolated rates for this field
 	interp_struct interpolation;
 	crackle_units cunits;
@@ -44,80 +45,83 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	/* Set up various unit conversions etc */
 	set_crackle_units(units, grackle_rates, chemistry->Gamma, &cunits);
 
-	/* Compute some basic properties */
+	/* Compute some basic properties, save T at start */
 	set_rhot(&gp, units, chemistry);
-
-	/* initialize inteprolation of chemistry rate tables for this particle */
-	init_temperature_interpolation(&gp, chemistry, &interpolation, cunits, grackle_rates);
+	gp.tstart = gp.tgas;
 
 	/* ISM flag: see whether we should be evolving dust and H2 */
 	int ism_flag = (gp.isrf_habing >= 0.);
 	if (gp.isrf_habing < 0.) gp.isrf_habing = 0.;
 
+	/* initialize inteprolation of chemistry rate tables for this particle */
+	init_temperature_interpolation(&gp, chemistry, &interpolation, cunits, grackle_rates);
+
 	while (dtcool < dt) {
 	    //if (ism_flag && gp.H2I_density/gp.density < 1.e-2 && gp.nH > 30.) gp.verbose=1;
+	    //if (gp.id == 3151076 && chemistry->use_radiative_transfer == 1) gp.verbose = 1;
+	    //if (gp.tgas < 100.) gp.verbose = 1;
 	    /* Retain previous iteration particle info */
 	    memmove(&gp_old, &gp, sizeof(gp)); 
 	    /* Set up cooling/heating rates interpolation */
 	    setup_temperature_interpolation(0.5*(gp.tgas+gp_old.tgas), chemistry, &interpolation);
 	    /* Get interpolated chemistry rates for this particle */
 	    lookup_chemistry_coeffs(chemistry->primordial_chemistry, grackle_rates, &my_rates, &interpolation);  
-	    /* Compute rate of change of thermal energy */
-	    compute_edot(&gp, chemistry, grackle_rates, &my_rates, my_uvb_rates, &interpolation, units, cunits, ism_flag);  
-	    /* If we've reached temp floor and are still cooling, then we're done */
-	    if (apply_temperature_bounds(&gp, chemistry, gp.temperature_floor, HEATLIM * gp.tgas)) break;
-
-	    /* Check if we can (and if it's worthwhile to) use a predictor-corrector for the rest of the timestep */
-	    if (!ism_flag && fabs(gp.edot_ext) > EDOT_EXT_FACTOR * fabs(gp.edot-gp.edot_ext) && dtit < 0.25 * (dt-dtcool)) {
-		/* Predictor step */
-		dtit = dt - dtcool;  // do entire remainder of the timestep at once
-	        evolve_hydrogen(&gp, &gp, chemistry, my_rates, dtit);  
-	        evolve_helium(&gp, &gp, chemistry, my_rates, dtit); 
-	        if (chemistry->primordial_chemistry >= 2) evolve_H2(&gp, ism_flag, chemistry, my_rates, cunits, dtit);  // sets H2=0
-	        evolve_elements(&gp, &gp_old, chemistry);
-	        evolve_internal_energy(&gp, chemistry, dtit);
-	        set_rhot(&gp, units, chemistry);
-	        memmove(&gp_old, &gp, sizeof(gp)); 
+	    /* In the first iteration we need to compute rates for computing the timestep, since we don't have it from previous iter */
+	    if (iter == 0) {
 	        compute_edot(&gp, chemistry, grackle_rates, &my_rates, my_uvb_rates, &interpolation, units, cunits, ism_flag);  
-	        evolve_hydrogen(&gp, &gp, chemistry, my_rates, dtit);  
-	        evolve_helium(&gp, &gp, chemistry, my_rates, dtit); 
-	        evolve_elements(&gp, &gp_old, chemistry);
-	        evolve_internal_energy(&gp, chemistry, dtit);
-	        evolve_pred_corr(&gp, &gp_old, chemistry);
-	        if (chemistry->use_dust_evol) evolve_dust(&gp, chemistry, units, ism_flag, dtit); 
-		dtcool = dt + tiny;
-	        apply_temperature_bounds(&gp, chemistry, gp.temperature_floor, HEATLIM * gp.tgas);
-		break;
+	        gp.HIdot = compute_HIdot(chemistry->primordial_chemistry, gp, chemistry, my_rates, units); 
+	        gp.dedot = compute_dedot(chemistry->primordial_chemistry, gp, chemistry, my_rates, units); 
 	    }
-
-	    /* Compute rate of change of electron density, used to set the timestep */
-	    gp.HIdot = compute_HIdot(chemistry->primordial_chemistry, gp, chemistry, my_rates, units); 
-	    gp.dedot = compute_dedot(chemistry->primordial_chemistry, gp, chemistry, my_rates, units); 
 	    /* Set the timestep for this iteration (lowering rates if they are too large) */
 	    float accuracy = chemistry->accuracy;
-	    if (ism_flag) accuracy = 0.5f;
+	    //if (ism_flag) accuracy = 0.5f;
 	    dtit = compute_iteration_dt(&gp, &gp_old, chemistry, dt, dtcool, accuracy, &dtsuppress);
 
-	    /* Evolve all quantities */
+	    /* If evol is driven by external heating/cooling there is no point iterating because edot won't change much */
+	    if (!ism_flag && fabs(gp.edot_ext) > EDOT_EXT_FACTOR * fabs(gp.edot-gp.edot_ext) && dtit < 0.25 * (dt-dtcool)) {
+		dtit = dt - dtcool;
+	    }
+
+	    /* Evolve H, He species densities */
 	    evolve_hydrogen(&gp, &gp, chemistry, my_rates, dtit);  
 	    evolve_helium(&gp, &gp, chemistry, my_rates, dtit); 
 	    if (chemistry->primordial_chemistry >= 2) evolve_H2(&gp, ism_flag, chemistry, my_rates, cunits, dtit);  
+	    evolve_elements(&gp, &gp_old, chemistry);
+
+	    /* Save step-averaged species densities so we can redo iteration at higher accuracy */
+	    evolve_pred_corr(&gp, &gp_old, chemistry);
+	    save_species_data(&gp, &gp_species);
+	    memmove(&gp, &gp_old, sizeof(gp)); 
+	    save_species_data(&gp_species, &gp);
+
+	    /* Do iteration again using step-averaged species densities; only need 1/2 iteration for species */
+	    compute_edot(&gp, chemistry, grackle_rates, &my_rates, my_uvb_rates, &interpolation, units, cunits, ism_flag);  
+	    evolve_hydrogen(&gp, &gp, chemistry, my_rates, 0.5 * dtit);  
+	    evolve_helium(&gp, &gp, chemistry, my_rates, 0.5 * dtit); 
+	    if (chemistry->primordial_chemistry >= 2) evolve_H2(&gp, ism_flag, chemistry, my_rates, cunits, 0.5 * dtit);  
 	    if (chemistry->use_dust_evol) evolve_dust(&gp, chemistry, units, ism_flag, dtit); 
 	    evolve_elements(&gp, &gp_old, chemistry);
-	    /* Advance thermal energy over full step using midpoint edot */
 	    evolve_internal_energy(&gp, chemistry, dtit);
+
+	    /* Done with iteration */
 	    set_rhot(&gp, units, chemistry);
 	    dtcool += dtit;
 	    iter ++;
 
-	    if (gp.verbose) printf("iter: i=%d dt=%g fdt=%g nh=%g e=%g de=%g HI=%g HII=%g H2I=%g HeI=%g HeII=%g dust=%g T=%g Td=%g\n", iter, dtit, dtcool/dt, gp.rhoH * units->density_units / mh, gp.internal_energy, gp.e_density, gp.HI_density/gp.density, gp.HII_density/gp.density, gp.H2I_density/gp.density, gp.HeI_density/gp.density, gp.HeII_density/gp.density, gp.dust_density/gp.density, gp.tgas, gp.tdust);
-	    if (gp.verbose) printf("rates: i=%d fdt=%g edot=%g dedot=%g HIdot=%g T=%g n=%g\n",iter, dtit/dt, gp.edot, gp.dedot, gp.HIdot, gp.tgas, gp.density*units->density_units/mh );
-	    
-	    /* Check for convergence or too many iterations */
-	    //if (fabs(gp.edot * dtit) < CONVERGENCE * gp.internal_energy * gp.density && fabs(gp.HIdot * dtit) < CONVERGENCE * fmax(gp.HI_density, MINFRAC) && fabs(gp.dedot * dtit) < CONVERGENCE * fmax(gp.e_density, MINFRAC)) break;
+	    if (gp.verbose) printf("iter: i=%d dt=%g fdt=%g id=%d nh=%g e=%g de=%g HI=%g HII=%g H2I=%g HeI=%g HeII=%g dust=%g T=%g Td=%g\n", iter, dtit, dtcool/dt, gp.id, gp.rhoH * units->density_units / mh, gp.internal_energy, gp.e_density, gp.HI_density/gp.density, gp.HII_density/gp.density, gp.H2I_density/gp.density, gp.HeI_density/gp.density, gp.HeII_density/gp.density, gp.dust_density/gp.density, gp.tgas, gp.tdust);
+	    if (gp.verbose) printf("rates: i=%d fdt=%g id=%d edot=%g dedot=%g HIdot=%g T=%g n=%g\n",iter, dtit/dt, gp.id, gp.edot, gp.dedot, gp.HIdot, gp.tgas, gp.density*units->density_units/mh );
+	   
+	    gp.verbose = 0; 
+
+	    /* If we've reached temp floor/ceiling and are still cooling/heating, then we're done */
+	    if (apply_temperature_bounds(&gp, chemistry, fmax(gp.temperature_floor, COOLLIM * gp.tstart), HEATLIM * gp.tstart)) break;
+
+	    /* If key quantities are converged then we're done */
 	    if (fabs(gp_old.internal_energy - gp.internal_energy) < CONVERGENCE * gp_old.internal_energy 
 		&& fabs(gp_old.HI_density - gp.HI_density) < CONVERGENCE * fmax(gp_old.HI_density, MINFRAC*gp_old.density)
 		&& fabs(gp_old.e_density - gp.e_density) < CONVERGENCE * fmax(gp_old.e_density, MINFRAC*gp_old.density) ) break;
+
+	    /* Too many iterations */
 	    if (iter > chemistry->max_iterations) break;
 	}
 
@@ -173,6 +177,7 @@ void evolve_internal_energy(grackle_part_data *gp, chemistry_data *chemistry, do
 	/* Limits -- don't let u change by more than accuracy level in a single iteration */
 	if (gp->internal_energy < (1.-chemistry->accuracy) * u_prev) gp->internal_energy = (1.-chemistry->accuracy) * u_prev;
 	if (gp->internal_energy > HEATLIM * u_prev) gp->internal_energy = HEATLIM * u_prev;
+	if (gp->internal_energy < COOLLIM * u_prev) gp->internal_energy = COOLLIM * u_prev;
 	if (gp->internal_energy < gp->u_cmb) gp->internal_energy = gp->u_cmb;
 
 	return;
@@ -261,8 +266,8 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	gp->edot += edot_comp;
 
 	/* Photoheating from radiative transfer */
-	if (chemistry->use_radiative_transfer && gp->f_shield * gp->RT_heating_rate > FLT_MIN) {
-	    edot_rt += gp->RT_heating_rate * gp->f_shield * gp->HI_density * cunits.dom_inv * cunits.coolunit_inv;
+	if (chemistry->use_radiative_transfer && gp->RT_heating_rate > FLT_MIN) {
+	    edot_rt += gp->RT_heating_rate * gp->fSShHI * gp->HI_density * cunits.dom_inv * cunits.coolunit_inv;
 	    gp->edot += edot_rt;
 	    gp->edot_ext += edot_rt;
 	}
@@ -297,8 +302,8 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	gp->edot_ext += edot_ext;
 
 	//gp->edot = edot_prim + edot/_h2 + edot_gasgr + edot_uvb + edot_pe + edot_edust + edot_comp + edot_rt + edot_h2heat + edot_ext + edot_metal;
-	if (gp->verbose && 0) {
-	    printf("edot: %g pr=%g h2=%g gr=%g uvb=%g pe=%g ed=%g co=%g rt=%g h2h=%g ext=%g met=%g\n",gp->edot, edot_prim , edot_h2 , edot_gasgr , edot_uvb, edot_pe , edot_edust , edot_comp , edot_rt , edot_h2heat , edot_ext , edot_metal); 
+	if (gp->verbose) {
+	    printf("edot: id=%d edot=%g pr=%g h2=%g gr=%g uvb=%g pe=%g ed=%g co=%g rt=%g h2h=%g ext=%g met=%g\n", gp->id, gp->edot, edot_prim , edot_h2 , edot_gasgr , edot_uvb, edot_pe , edot_edust , edot_comp , edot_rt , edot_h2heat , edot_ext , edot_metal); 
 	    fflush(stdout);
 	}
 
@@ -327,8 +332,8 @@ double compute_dedot(int chemistry_flag, grackle_part_data gp, chemistry_data *c
 		+ 0.25 * my_rates.k26shield * gp.HeI_density;
 	}
 	/* RT photoionization */
-	if (chemistry->use_radiative_transfer && gp.f_shield * gp.RT_heating_rate > FLT_MIN) {
-	    dedot += gp.RT_HI_ionization_rate * gp.f_shield * gp.HI_density + 0.25 * gp.f_shield * (gp.RT_HeI_ionization_rate * gp.HeI_density + gp.RT_HeII_ionization_rate * gp.HeII_density);
+	if (chemistry->use_radiative_transfer && gp.RT_heating_rate > FLT_MIN) {
+	    dedot += gp.RT_HI_ionization_rate * gp.fSShHI * gp.HI_density + 0.25 * (gp.RT_HeI_ionization_rate * gp.fSShHeI * gp.HeI_density + gp.RT_HeII_ionization_rate * gp.fSShHeII * gp.HeII_density);
 	}
 
 	/* Molecular */
@@ -358,7 +363,7 @@ double compute_HIdot(int chemistry_flag, grackle_part_data gp, chemistry_data *c
 		- my_rates.k24shield * gp.HI_density;
 	/* RT photoionization */
 	if (chemistry->use_radiative_transfer) {
-	    HIdot -= gp.RT_HI_ionization_rate * gp.f_shield * gp.HI_density;
+	    HIdot -= gp.RT_HI_ionization_rate * gp.fSShHI * gp.HI_density;
 	}
 
 	/* Molecular */
@@ -398,7 +403,7 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
 	if (chemistry->UVbackground > 0) {
 	    acoef += my_rates.k26;
 	}
-	if (chemistry->use_radiative_transfer) acoef += p->f_shield * p->RT_HeI_ionization_rate;
+	if (chemistry->use_radiative_transfer) acoef += p->RT_HeI_ionization_rate * p->fSShHeI;
 	double HeIp = (scoef * dtit + p->HeI_density) / (1.f + acoef * dtit);
 	if (HeIp < 0. ) HeIp = 0.;
 	p->delta_HeI = HeIp - p->HeI_density;
@@ -412,8 +417,8 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
 	    acoef += my_rates.k25;
 	}
 	if (chemistry->use_radiative_transfer) {
-	    scoef += p->f_shield * p->RT_HeI_ionization_rate * HeIp;
-	    acoef += p->f_shield * p->RT_HeII_ionization_rate;
+	    scoef += p->RT_HeI_ionization_rate * p->fSShHeI * HeIp;
+	    acoef += p->RT_HeII_ionization_rate * p->fSShHeII;
 	}
 	double HeIIp = (scoef * dtit + p->HeII_density) / (1.f + acoef * dtit);
 	if (HeIIp < 0. ) HeIIp = 0.;
@@ -425,7 +430,7 @@ void evolve_helium(grackle_part_data *p, grackle_part_data *gp_old, chemistry_da
 	if (chemistry->UVbackground > 0) {
 	    scoef += my_rates.k25shield * HeIIp;
 	}
-	if (chemistry->use_radiative_transfer) scoef += p->f_shield * p->RT_HeII_ionization_rate * HeIIp;
+	if (chemistry->use_radiative_transfer) scoef += p->RT_HeII_ionization_rate * p->fSShHeII * HeIIp;
 	p->delta_HeIII = (scoef * dtit + p->HeIII_density) / (1.f + acoef * dtit) - p->HeIII_density; 
 	if (p->delta_HeIII + p->HeIII_density < 0.f ) p->delta_HeIII = -p->HeIII_density;
 	/*if (p->delta_HeII != p->delta_HeII || p->delta_HeIII != p->delta_HeIII) {
@@ -465,7 +470,7 @@ void evolve_hydrogen(grackle_part_data *p, grackle_part_data *gp_old, chemistry_
      	      acoef += my_rates.k24shield;
 	}
 	if (chemistry->use_radiative_transfer) {
-	      acoef += p->f_shield * p->RT_HI_ionization_rate;
+	      acoef += p->RT_HI_ionization_rate * p->fSShHI;
 	}
 	if (chemistry->primordial_chemistry >= 2) {
 	    acoef += my_rates.k7 * p->e_density
@@ -496,7 +501,7 @@ void evolve_hydrogen(grackle_part_data *p, grackle_part_data *gp_old, chemistry_
 	    scoef += my_rates.k24shield * p->HI_density;
 	}
 	if (chemistry->use_radiative_transfer) {
-	    scoef += p->f_shield * p->RT_HI_ionization_rate * p->HI_density;
+	    scoef += p->RT_HI_ionization_rate * p->fSShHI * p->HI_density;
 	}
 	double HIIp = (scoef * dtit + p->HII_density) / (1.f + acoef * dtit);
 	if (HIIp < 0. ) HIIp = 0.;
@@ -516,9 +521,9 @@ void evolve_hydrogen(grackle_part_data *p, grackle_part_data *gp_old, chemistry_
      	          + 0.25 * my_rates.k26shield * (p->HeI_density+p->delta_HeI);
 	}
 	if (chemistry->use_radiative_transfer) {
-	    scoef += p->f_shield * p->RT_HI_ionization_rate * HIp
-	          + 0.25 * p->f_shield * p->RT_HeI_ionization_rate * (p->HeI_density+p->delta_HeI)
-	          + 0.25 * p->f_shield * p->RT_HeII_ionization_rate * (p->HeII_density+p->delta_HeII);
+	    scoef += p->RT_HI_ionization_rate * p->fSShHI*  HIp
+	          + 0.25 * p->RT_HeI_ionization_rate * p->fSShHeI * (p->HeI_density+p->delta_HeI)
+	          + 0.25 * p->RT_HeII_ionization_rate * p->fSShHeII * (p->HeII_density+p->delta_HeII);
 	}
 	acoef = my_rates.k1 * p->HI_density
 	      - my_rates.k2 * p->HII_density
@@ -567,7 +572,6 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, ch
 	}
 	p->delta_H2I = (scoef * dtit + p->H2I_density) / (1.f + acoef * dtit) - p->H2I_density;
 	if (p->delta_H2I < -p->H2I_density) p->delta_H2I = -p->H2I_density;
-	if (p->verbose) printf("H2: %g %g %g %g %g %g %g\n",p->density,scoef*dtit,acoef*dtit,my_rates.h2dust,my_rates.k31shield,p->H2I_density,p->delta_H2I);
 
 	/* H- */
 	scoef = my_rates.k7 * p->e_density * p->HI_density;
@@ -622,7 +626,6 @@ void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry
 {
 	check_hydrogen(gp, 1);
 	/* Limit change for H species */
-	if (gp->verbose) fprintf(stdout,"evolve: nH=%g rho=%g HI=%g %g  HII=%g %g  H2=%g %g\n",gp->nH,gp->density,gp->HI_density,gp->delta_HI,gp->HII_density,gp->delta_HII,gp->H2I_density,gp->delta_H2I);
 	if (gp->HI_density + gp->delta_HI < 0.) gp->delta_HI = -gp->HI_density;
 	if (gp->HI_density + gp->delta_HI > gp->rhoH) gp->delta_HI = gp->rhoH - gp->HI_density;
 	if (gp->HII_density + gp->delta_HII < 0.) gp->delta_HII = -gp->HII_density;
@@ -679,9 +682,13 @@ void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry
 
 void evolve_pred_corr(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry)
 {
-	/* Evolve all species */
+	/* Evolve all primordial species */
 	gp->HI_density = 0.5 * (gp->HI_density + gp_old->HI_density);
 	gp->HII_density = 0.5 * (gp->HII_density + gp_old->HII_density);
+	gp->H2I_density = 0.5 * (gp->H2I_density + gp_old->H2I_density);
+	gp->H2II_density = 0.5 * (gp->H2II_density + gp_old->H2II_density);
+	gp->HM_density = 0.5 * (gp->HM_density + gp_old->HM_density);
+
 	gp->HeI_density = 0.5 * (gp->HeI_density + gp_old->HeI_density);
 	gp->HeII_density = 0.5 * (gp->HeII_density + gp_old->HeII_density);
 	gp->HeIII_density = 0.5 * (gp->HeIII_density + gp_old->HeIII_density);
@@ -709,6 +716,21 @@ void evolve_pred_corr(grackle_part_data *gp, grackle_part_data *gp_old, chemistr
 	/* Compute new electron density */
 	compute_electron_density(gp);
 
+	return;
+}
+
+void save_species_data(grackle_part_data *gp_orig, grackle_part_data *gp_target) 
+{
+        /* Copy species fractions from gp_orig to gp_target */
+	gp_target->HI_density = gp_orig->HI_density;
+	gp_target->HII_density = gp_orig->HII_density;
+	gp_target->H2I_density = gp_orig->H2I_density;
+	gp_target->H2II_density = gp_orig->H2II_density;
+	gp_target->HM_density = gp_orig->HM_density;
+	gp_target->HeI_density = gp_orig->HeI_density;
+	gp_target->HeII_density = gp_orig->HeII_density;
+	gp_target->HeIII_density = gp_orig->HeIII_density;
+	gp_target->e_density = gp_orig->e_density;
 	return;
 }
 
