@@ -52,32 +52,16 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
         /* We have self-shielding! */
         /* HI self-shielding factor */
 	double l_H2shield = cunits.c_ljeans * sqrt(gp->tgas / (gp->mmw * gp->density)); // use the Jeans length
-        if (my_rates->k24 < tiny) {
-            gp->fSShHI = 1.;
-            /* For RT we still need self-shielding, but can't compute normally since k24=0. Use NHI=1e17 threshold. */
-            if (chemistry->use_radiative_transfer && gp->isrf_habing > 0.) {
-                const double NHI = cunits.dom * gp->rhoH * l_H2shield * gp->HI_density / gp->density;
-                if (NHI < 5.e18) gp->fSShHI = exp(-NHI / 1.e17);
-                else gp->fSShHI = 0.f;
-                if (gp->verbose) printf("edot: (ss) rho=%g nH=%g fHI=%g NHI=%g lj=%g G0=%g fss=%g\n", gp->density, gp->nH, gp->HI_density / gp->density, NHI, l_H2shield / 3.086e18, gp->isrf_habing, gp->fSShHI);
-            }
-        }
+        if (my_rates->k24 < tiny) gp->fSShHI = 1.;
 	else {
             const double nSSh =  6.73e-3 * pow(my_uvb_rates.crsHI * cunits.time_to_cgs * 1.e-12 / (2.49e-18 * my_rates->k24), -0.6666667) * pow(gp->tgas*1.e-4, 0.17);
             const double nratio = gp->rhoH * cunits.dom / nSSh;
             gp->fSShHI = 0.98*pow(1.+pow(nratio,1.64), -2.28) + 0.02*pow(1.+nratio, -0.84);
 	}
 
-        if (chemistry->self_shielding_method == 2 || chemistry->self_shielding_method >= 3) {
+        if (chemistry->self_shielding_method == 2 || chemistry->self_shielding_method == 3) {
             /* HeI self-shielding factor */
-	    if (my_rates->k26 < tiny) {
-                gp->fSShHeI = 1.;
-                if (chemistry->use_radiative_transfer && gp->isrf_habing > 0.) {
-                    const double NHeI = gp->HeI_density * l_H2shield / (mh * cunits.length_to_cgs * cunits.length_to_cgs);
-                    if (NHeI < 5.e18) gp->fSShHeI = exp(-NHeI / 1.e17);
-                    else gp->fSShHeI = 0.f;
-	        }
-	    }
+	    if (my_rates->k26 < tiny) gp->fSShHeI = 1.;
 	    else {
                 const double nSSh_he =  6.73e-3 * pow(my_uvb_rates.crsHI * cunits.time_to_cgs * 1.e-12 / (2.49e-18 * my_rates->k26), -0.6666667) * pow(gp->tgas*1.e-4, 0.17);
                 const double nratio_he = gp->rhoHe * cunits.dom / nSSh_he;
@@ -85,7 +69,7 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
 	    }
         }
 
-        if (chemistry->self_shielding_method >= 3) {
+        if (chemistry->self_shielding_method == 3 ) {
             /* HeII self-shielding factor: in this mode, HeII assumed to be completely shielded */
             gp->fSShHeII = 0.f;
         }
@@ -94,7 +78,7 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
 	my_rates->k24shield *= gp->fSShHI;
 	my_rates->k29shield *= gp->fSShHI;
 	/* Rahmati plus assuming He closely follows H */
-	if (chemistry->self_shielding_method == 2 || chemistry->self_shielding_method >= 3) {
+	if (chemistry->self_shielding_method == 2 || chemistry->self_shielding_method == 3) {
 	    my_rates->k26shield *= gp->fSShHeI;
 	    my_rates->k28shield *= gp->fSShHeI;
 	    my_rates->k30shield *= gp->fSShHeI;
