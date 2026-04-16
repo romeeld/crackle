@@ -63,7 +63,7 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	    /* Get interpolated chemistry rates for this particle */
 	    lookup_chemistry_coeffs(chemistry->primordial_chemistry, grackle_rates, &my_rates, &interpolation);  
 	    /* Compute rate of change of thermal energy */
-	    compute_edot(&gp, chemistry, grackle_rates, &my_rates, my_uvb_rates, &interpolation, units, cunits, ism_flag);  
+	    compute_edot(&gp, chemistry, grackle_rates, &my_rates, my_uvb_rates, &interpolation, units, cunits, ism_flag, dtit);  
 	    /* If we've reached temp floor and are still cooling, then we're done */
 	    if (apply_temperature_bounds(&gp, chemistry, gp.temperature_floor, HEATLIM * gp.tgas)) break;
 
@@ -78,7 +78,7 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	        evolve_internal_energy(&gp, chemistry, dtit);
 	        set_rhot(&gp, units, chemistry);
 	        memmove(&gp_old, &gp, sizeof(gp)); 
-	        compute_edot(&gp, chemistry, grackle_rates, &my_rates, my_uvb_rates, &interpolation, units, cunits, ism_flag);  
+	        compute_edot(&gp, chemistry, grackle_rates, &my_rates, my_uvb_rates, &interpolation, units, cunits, ism_flag, dtit);  
 	        evolve_hydrogen(&gp, &gp, chemistry, my_rates, dtit);  
 	        evolve_helium(&gp, &gp, chemistry, my_rates, dtit); 
 	        evolve_elements(&gp, &gp_old, chemistry);
@@ -177,7 +177,7 @@ void evolve_internal_energy(grackle_part_data *gp, chemistry_data *chemistry, do
 
 	const double du = gp->edot / gp->density * dtit;
 
-	if (gp->internal_energy > 5e4 || du > 1e4) {
+	if (gp->internal_energy > 1e5 || du > 1e3) {
     		printf("HOT PARTICLE\n");
     		printf("u_prev = %g\n", u_prev);
     		printf("edot = %g\n", gp->edot);
@@ -192,7 +192,7 @@ void evolve_internal_energy(grackle_part_data *gp, chemistry_data *chemistry, do
 	return;
 }
 
-void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_data_storage grackle_rates, chemistry_rate_storage *my_rates, photo_rate_storage my_uvb_rates, interp_struct *interpolation, code_units *units, crackle_units cunits, int ism_flag)
+void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_data_storage grackle_rates, chemistry_rate_storage *my_rates, photo_rate_storage my_uvb_rates, interp_struct *interpolation, code_units *units, crackle_units cunits, int ism_flag, double dtit)
 {
 	double edot_prim = 0., edot_h2 = 0., edot_gasgr = 0., edot_uvb = 0., edot_pe = 0., edot_edust = 0., edot_comp = 0., edot_rt = 0., edot_h2heat = 0., edot_ext = 0., edot_metal = 0.;
 
@@ -319,10 +319,20 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	    fflush(stdout);
 	}
 
-	if (gp->internal_energy > 5e4) {
+	if (dtit > 0){
+
+	const double du = gp->edot / gp->density * dtit;
+
+	if (gp->internal_energy > 1e5 || du > 1e3) {
             printf("HOT edot: %g pr=%g h2=%g gr=%g uvb=%g pe=%g ed=%g co=%g rt=%g h2h=%g ext=%g met=%g\n",gp->edot, edot_prim , edot_h2 , edot_gasgr , edot_uvb, edot_pe , edot_edust , edot_comp , edot_rt , edot_h2heat , edot_ext , edot_metal);
-            fflush(stdout);
+            printf("u_prev = %g\n", gp->internal_energy);
+            printf("edot = %g\n", gp->edot);
+            printf("density = %g\n", gp->density);
+            printf("dt = %g\n", dtit);
+            printf("du = %g\n", du);
+	    fflush(stdout);
         }
+	}
 
 	assert(gp->edot==gp->edot && "CRACKLE ERROR: gp->edot is nan.");  // check for NaN
 
@@ -757,7 +767,8 @@ void crackle_cooling_time(grackle_field_data *p, chemistry_data *chemistry, chem
 	int ism_flag = (gp->isrf_habing >= 0.);
 	if (gp->isrf_habing < 0.) gp->isrf_habing = 0.;
 	/* Compute rate of change of thermal energy */
-	compute_edot(gp, chemistry, grackle_rates, &my_rates, my_uvb_rates, &interpolation, units, cunits, ism_flag);  
+	double dtit =0;
+	compute_edot(gp, chemistry, grackle_rates, &my_rates, my_uvb_rates, &interpolation, units, cunits, ism_flag, dtit);  
 
 	*tcool = gp->internal_energy * gp->density / (gp->edot+tiny);
 	return;
