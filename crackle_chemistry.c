@@ -58,8 +58,9 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 
 	while (dtcool < dt) {
 	    //if (ism_flag && gp.H2I_density/gp.density < 1.e-2 && gp.nH > 30.) gp.verbose=1;
-	    //if (gp.id == 3151076 && chemistry->use_radiative_transfer == 1) gp.verbose = 1;
+	    //if (gp.id == 4066956 && chemistry->use_radiative_transfer == 1) gp.verbose = 1;
 	    //if (gp.tgas < 100.) gp.verbose = 1;
+	    //if (ism_flag) gp.verbose = 1;
 	    /* Retain previous iteration particle info */
 	    memmove(&gp_old, &gp, sizeof(gp)); 
 	    /* Set up cooling/heating rates interpolation */
@@ -130,9 +131,9 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	    iter = chemistry->max_iterations;
 	    evolve_hydrogen(&gp, &gp, chemistry, my_rates, dt - dtcool);  
 	    evolve_H2(&gp, ism_flag, chemistry, my_rates, cunits, dt - dtcool); 
+	    if (chemistry->use_dust_evol) evolve_dust(&gp, chemistry, units, ism_flag, dt - dtcool); 
 	    evolve_elements(&gp, &gp_old, chemistry);
 	}
-	if (dtcool < dt && chemistry->use_dust_evol) evolve_dust(&gp, chemistry, units, ism_flag, dt - dtcool); 
 
 	/* Copy from grackle_part_data */
 	copy_grackle_fields_from_part(p, &gp, chemistry);
@@ -208,8 +209,8 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 	gp->edot += edot_prim;
 
 	/* Calculate self-shielding */
-	gp->f_shield = compute_self_shielded_rates(gp, chemistry, my_rates, my_uvb_rates, cunits);
-	if (ism_flag == 0) gp->f_shield = 1.f;
+	gp->f_shield = 1.f;
+	if (ism_flag != 0) gp->f_shield = compute_self_shielded_rates(gp, chemistry, my_rates, my_uvb_rates, cunits);
 
 	/* Add H2 cooling (Glover & Abel 2008); fudge at extreme density NOT included */
 	if (chemistry->primordial_chemistry >= 2) {
@@ -267,7 +268,7 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 
 	/* Photoheating from radiative transfer */
 	if (chemistry->use_radiative_transfer && gp->RT_heating_rate > FLT_MIN) {
-	    edot_rt += gp->RT_heating_rate * gp->fSShHI * gp->HI_density * cunits.dom_inv * cunits.coolunit_inv;
+	    edot_rt += gp->RT_heating_rate * gp->f_shield * gp->HI_density * cunits.dom_inv * cunits.coolunit_inv;
 	    gp->edot += edot_rt;
 	    gp->edot_ext += edot_rt;
 	}
@@ -303,7 +304,7 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_da
 
 	//gp->edot = edot_prim + edot/_h2 + edot_gasgr + edot_uvb + edot_pe + edot_edust + edot_comp + edot_rt + edot_h2heat + edot_ext + edot_metal;
 	if (gp->verbose) {
-	    printf("edot: id=%d edot=%g pr=%g h2=%g gr=%g uvb=%g pe=%g ed=%g co=%g rt=%g h2h=%g ext=%g met=%g\n", gp->id, gp->edot, edot_prim , edot_h2 , edot_gasgr , edot_uvb, edot_pe , edot_edust , edot_comp , edot_rt , edot_h2heat , edot_ext , edot_metal); 
+	    printf("edot: id=%d edot=%g pr=%g h2=%g gr=%g uvb=%g pe=%g ed=%g co=%g rt=%g h2h=%g ext=%g (%g) met=%g\n", gp->id, gp->edot, edot_prim , edot_h2 , edot_gasgr , edot_uvb, edot_pe , edot_edust , edot_comp , edot_rt , edot_h2heat , edot_ext , gp->specific_heating_rate, edot_metal); 
 	    fflush(stdout);
 	}
 
@@ -332,7 +333,7 @@ double compute_dedot(int chemistry_flag, grackle_part_data gp, chemistry_data *c
 		+ 0.25 * my_rates.k26shield * gp.HeI_density;
 	}
 	/* RT photoionization */
-	if (chemistry->use_radiative_transfer && gp.RT_heating_rate > FLT_MIN) {
+	if (chemistry->use_radiative_transfer && gp.RT_HI_ionization_rate > FLT_MIN) {
 	    dedot += gp.RT_HI_ionization_rate * gp.fSShHI * gp.HI_density + 0.25 * (gp.RT_HeI_ionization_rate * gp.fSShHeI * gp.HeI_density + gp.RT_HeII_ionization_rate * gp.fSShHeII * gp.HeII_density);
 	}
 

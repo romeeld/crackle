@@ -46,46 +46,8 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
 	my_rates->k30shield = my_rates->k30;
 	my_rates->k31shield = my_rates->k31;
 
-	/* No self-shielding, so no changes to rates */
-	if (chemistry->self_shielding_method == 0 || (chemistry->UVbackground == 0 && chemistry->use_radiative_transfer == 0)) return 1.f;
-
-        /* We have self-shielding! */
-        /* HI self-shielding factor */
-	double l_H2shield = cunits.c_ljeans * sqrt(gp->tgas / (gp->mmw * gp->density)); // use the Jeans length
-        if (my_rates->k24 < tiny) gp->fSShHI = 1.;
-	else {
-            const double nSSh =  6.73e-3 * pow(my_uvb_rates.crsHI * cunits.time_to_cgs * 1.e-12 / (2.49e-18 * my_rates->k24), -0.6666667) * pow(gp->tgas*1.e-4, 0.17);
-            const double nratio = gp->rhoH * cunits.dom / nSSh;
-            gp->fSShHI = 0.98*pow(1.+pow(nratio,1.64), -2.28) + 0.02*pow(1.+nratio, -0.84);
-	}
-
-        if (chemistry->self_shielding_method == 2 || chemistry->self_shielding_method == 3) {
-            /* HeI self-shielding factor */
-	    if (my_rates->k26 < tiny) gp->fSShHeI = 1.;
-	    else {
-                const double nSSh_he =  6.73e-3 * pow(my_uvb_rates.crsHI * cunits.time_to_cgs * 1.e-12 / (2.49e-18 * my_rates->k26), -0.6666667) * pow(gp->tgas*1.e-4, 0.17);
-                const double nratio_he = gp->rhoHe * cunits.dom / nSSh_he;
-                gp->fSShHeI = 0.98*pow(1.+pow(nratio_he,1.64), -2.28) + 0.02*pow(1.+nratio_he, -0.84);
-	    }
-        }
-
-        if (chemistry->self_shielding_method == 3 ) {
-            /* HeII self-shielding factor: in this mode, HeII assumed to be completely shielded */
-            gp->fSShHeII = 0.f;
-        }
-
-	/* Rahmati+2013 H self-shielding */
-	my_rates->k24shield *= gp->fSShHI;
-	my_rates->k29shield *= gp->fSShHI;
-	/* Rahmati plus assuming He closely follows H */
-	if (chemistry->self_shielding_method == 2 || chemistry->self_shielding_method == 3) {
-	    my_rates->k26shield *= gp->fSShHeI;
-	    my_rates->k28shield *= gp->fSShHeI;
-	    my_rates->k30shield *= gp->fSShHeI;
-	}
-
 	/* Set up H2 self-shielding */
-	double f_shield = 1.;
+	double f_shield = 1., l_H2shield;
 	if (chemistry->H2_self_shielding > 0 && chemistry->H2_custom_shielding != 1) {
 	    if (chemistry->H2_custom_shielding > 0) {
 	        l_H2shield = gp->H2_self_shielding_length * cunits.length_to_cgs; // user specifies the H2 shielding length
@@ -126,8 +88,42 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
 	    // user specifies the H2 shielding factor directly
 	    f_shield = gp->H2_custom_shielding_factor;
 	}
-
 	my_rates->k31shield *= f_shield;
+
+	/* Do atomic self-shielding, if required */
+	if (chemistry->self_shielding_method == 0 || (chemistry->UVbackground == 0 && chemistry->use_radiative_transfer == 0)) return f_shield;
+
+        /* self_shielding_method is at least 1: include HI self-shielding factor */
+	l_H2shield = cunits.c_ljeans * sqrt(gp->tgas / (gp->mmw * gp->density)); // use the Jeans length
+        if (my_rates->k24 < tiny) gp->fSShHI = 1.;
+	else {
+            const double nSSh =  6.73e-3 * pow(my_uvb_rates.crsHI * cunits.time_to_cgs * 1.e-12 / (2.49e-18 * my_rates->k24), -0.6666667) * pow(gp->tgas*1.e-4, 0.17);
+            const double nratio = gp->rhoH * cunits.dom / nSSh;
+            gp->fSShHI = 0.98*pow(1.+pow(nratio,1.64), -2.28) + 0.02*pow(1.+nratio, -0.84);
+	}
+
+        if (chemistry->self_shielding_method == 2 || chemistry->self_shielding_method == 3) {
+            /* HeI self-shielding factor */
+	    if (my_rates->k26 < tiny) gp->fSShHeI = 1.;
+	    else {
+                const double nSSh_he =  6.73e-3 * pow(my_uvb_rates.crsHI * cunits.time_to_cgs * 1.e-12 / (2.49e-18 * my_rates->k26), -0.6666667) * pow(gp->tgas*1.e-4, 0.17);
+                const double nratio_he = gp->rhoHe * cunits.dom / nSSh_he;
+                gp->fSShHeI = 0.98*pow(1.+pow(nratio_he,1.64), -2.28) + 0.02*pow(1.+nratio_he, -0.84);
+	    }
+        }
+
+        if (chemistry->self_shielding_method == 3 ) {
+            /* HeII self-shielding factor: in this mode, HeII assumed to be completely shielded */
+            gp->fSShHeII = 0.f;
+        }
+
+	my_rates->k24shield *= gp->fSShHI;
+	my_rates->k29shield *= gp->fSShHI;
+	if (chemistry->self_shielding_method == 2 || chemistry->self_shielding_method == 3) {
+	    my_rates->k26shield *= gp->fSShHeI;
+	    my_rates->k28shield *= gp->fSShHeI;
+	    my_rates->k30shield *= gp->fSShHeI;
+	}
 
 	return f_shield;
 }
