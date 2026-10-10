@@ -397,6 +397,12 @@ static inline double cloudy_metal_cooling(double logtem, chemistry_data *chemist
 	    edot_metal -= exp(M_LN10 * log_edot);
 	}
 
+	/* UVB heating, at the gas temperature (must come before the CMB term, which resets the T lookup to T_CMB) */
+	if (chemistry->UVbackground) {
+	    log_edot = interpolate_3d(interpolation, gr->cloudy_metal.heating_data, gr->cloudy_metal.grid_dimension, gr->cloudy_metal.grid_parameters);
+	    edot_metal += exp(M_LN10 * log_edot);
+	}
+
 	/* CMB heating, if near CMB temperature */
 	if (interpolation->cloudy_par[2] - cunits->log10_TCMB < 2.f) {
 	    interpolation->cloudy_par[2] = cunits->log10_TCMB;  
@@ -406,12 +412,6 @@ static inline double cloudy_metal_cooling(double logtem, chemistry_data *chemist
 	    if (interpolation->cloudy_index[2] < 0) interpolation->cloudy_index[2] = 0;
 	    if (interpolation->cloudy_index[2] > gr->cloudy_metal.grid_dimension[2]-2) interpolation->cloudy_index[2] = gr->cloudy_metal.grid_dimension[2]-2;
 	    log_edot = interpolate_3d(interpolation, gr->cloudy_metal.cooling_data, gr->cloudy_metal.grid_dimension, gr->cloudy_metal.grid_parameters);
-	    edot_metal += exp(M_LN10 * log_edot);
-	}
-
-	/* UVB heating */
-	if (chemistry->UVbackground) {
-	    log_edot = interpolate_3d(interpolation, gr->cloudy_metal.heating_data, gr->cloudy_metal.grid_dimension, gr->cloudy_metal.grid_parameters);
 	    edot_metal += exp(M_LN10 * log_edot);
 	}
 
