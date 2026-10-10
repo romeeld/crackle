@@ -33,3 +33,11 @@ ln -s crackle/* .
 
 Then proceed with making grackle as usual.  
 To update crackle, just git pull the changes into the crackle subdirectory and all should proceed as normal (if you've made symlinks).
+
+TESTING
+
+After building grackle (make in src/clib, no need to install), run the regression tests with:
+
+crackle/tests/run_tests.sh
+
+This evolves a gas parcel in several regimes (hot CGM, UVB-heated, self-shielded, warm/cold/hot ISM gas) with one crackle call per timestep, and checks the temperature against a converged reference using 100 substeps at higher accuracy.  It also checks specific fixes (H2 formation on dust, RT H2 dissociation, calculate_temperature before the first solve).  Add -g to also print the original Fortran grackle results for comparison.  The Cloudy data files are taken from grackle's input directory; set CRACKLE_DATA_DIR to use another location.
