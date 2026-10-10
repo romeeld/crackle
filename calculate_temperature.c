@@ -77,6 +77,8 @@ int local_calculate_temperature(chemistry_data *my_chemistry,
     return SUCCESS;
 
   if (my_chemistry->use_grackle == 2) {
+    /* crackle uses my_units->temperature_units, which may not be set if solve_chemistry hasn't been called yet */
+    my_units->temperature_units = get_temperature_units(my_units);
     crackle_temperature(my_fields, my_chemistry, my_units, temperature);
     return SUCCESS;
   }

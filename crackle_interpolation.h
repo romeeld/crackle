@@ -45,6 +45,8 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
 	my_rates->k29shield = my_rates->k29;
 	my_rates->k30shield = my_rates->k30;
 	my_rates->k31shield = my_rates->k31;
+	/* RT H2 photodissociation (code units, like k31); as in Grackle it is added before H2 self-shielding is applied */
+	if (chemistry->use_radiative_transfer) my_rates->k31shield += gp->RT_H2_dissociation_rate;
 
 	/* Set up H2 self-shielding */
 	double f_shield = 1., l_H2shield;
@@ -55,7 +57,7 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
 	    else {  
 	        l_H2shield = cunits.c_ljeans * sqrt(gp->tgas / (gp->mmw * gp->density)); // otherwise we use the Jeans length
 	    }
-	    if (chemistry->H2_self_shielding >= 3) {
+	    if (chemistry->H2_self_shielding == 3) {
 	    /* H2 self-shielding following Wolcott-Green & Haiman (2019),
  	       range of validity: T=100-8000 K, n<=1e7 cm^-3 */
 	        const double N_H2 = cunits.dom * gp->rhoH2 * l_H2shield;
@@ -106,8 +108,8 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
             /* HeI self-shielding factor */
 	    if (my_rates->k26 < tiny) gp->fSShHeI = 1.;
 	    else {
-                const double nSSh_he =  6.73e-3 * pow(my_uvb_rates.crsHI * cunits.time_to_cgs * 1.e-12 / (2.49e-18 * my_rates->k26), -0.6666667) * pow(gp->tgas*1.e-4, 0.17);
-                const double nratio_he = gp->rhoHe * cunits.dom / nSSh_he;
+                const double nSSh_he =  6.73e-3 * pow(my_uvb_rates.crsHeI * cunits.time_to_cgs * 1.e-12 / (2.49e-18 * my_rates->k26), -0.6666667) * pow(gp->tgas*1.e-4, 0.17);
+                const double nratio_he = 0.25 * gp->rhoHe * cunits.dom / nSSh_he;  // He number density
                 gp->fSShHeI = 0.98*pow(1.+pow(nratio_he,1.64), -2.28) + 0.02*pow(1.+nratio_he, -0.84);
 	    }
         }
@@ -115,6 +117,7 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
         if (chemistry->self_shielding_method == 3 ) {
             /* HeII self-shielding factor: in this mode, HeII assumed to be completely shielded */
             gp->fSShHeII = 0.f;
+            my_rates->k25shield = 0.;  // as in Grackle: HeII photoionization ignored
         }
 
 	my_rates->k24shield *= gp->fSShHI;
@@ -343,8 +346,8 @@ static inline double interpolate_3d(double *par, int *ind, double *cloudy_data, 
 	value = (par[0] - gridpar[0][ind[0]]) * slope + value2[1];
 	//assert( (par[2]>=0.9999*gridpar[2][ind[2]]) && (par[2]<=1.0001*gridpar[2][ind[2]+1]) ); // some slop to account for the cloudy table in floats vs crackle using doubles
 	if (value != value) {
-            printf("Something wrong in interpolate_3d! value=nan\n");
-            pause();
+            fprintf(stderr, "CRACKLE ERROR: interpolate_3d returned NaN (par=%g %g %g, ind=%d %d %d)\n", par[0], par[1], par[2], ind[0], ind[1], ind[2]);
+            abort();  // pause() would hang the job indefinitely
         }
 	return value;
 }
@@ -398,8 +401,8 @@ static inline double cloudy_metal_cooling(double logtem, chemistry_data *chemist
 	}
 
 	if (edot_metal != edot_metal) {
-                printf("Something wrong in cloudy_metal_cooling! edot_metal=nan\n");
-                pause();
+                fprintf(stderr, "CRACKLE ERROR: cloudy_metal_cooling returned NaN (logT=%g)\n", logtem);
+                abort();
         }
 
 	return edot_metal;

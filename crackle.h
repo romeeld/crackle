@@ -15,6 +15,7 @@ typedef struct
   /* For Crackle's integration scheme */
   double edot;
   double edot_ext;
+  double edot_end;  // edot near the end of the last iteration, for the timestep
   double dedot;
   double HIdot;
   double H2Idot;
@@ -326,13 +327,15 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 
 void evolve_internal_energy(grackle_part_data *gp, chemistry_data *chemistry, double dtit);
 
+void evolve_energy_ros2(grackle_part_data *gp, double u0, double dtit, chemistry_data *chemistry, chemistry_data_storage grackle_rates, chemistry_rate_storage *my_rates, photo_rate_storage uvb_rates, interp_struct *interpolation, code_units *units, crackle_units cunits, int ism_flag);
+
 void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_data_storage rates_table, chemistry_rate_storage *my_rates, photo_rate_storage uvb_rates, interp_struct *interpolation, code_units *units, crackle_units cunits, int ism_flag);
 
 double compute_dedot(int chemistry_flag, grackle_part_data gp, chemistry_data *chemistry, chemistry_rate_storage my_rates, code_units *units);
 
 double compute_HIdot(int chemistry_flag, grackle_part_data gp, chemistry_data *chemistry, chemistry_rate_storage my_rates, code_units *units);
 
-double compute_iteration_dt(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, double dt, double dtcool, float accuracy, double *dtsuppress);
+double compute_iteration_dt(grackle_part_data *gp, double edot_prev, chemistry_data *chemistry, double dt, double dtcool, float accuracy, double *dtsuppress);
 
 void evolve_helium(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, chemistry_rate_storage my_rates, double dtit);
 
