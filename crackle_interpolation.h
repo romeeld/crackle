@@ -45,6 +45,8 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
 	my_rates->k29shield = my_rates->k29;
 	my_rates->k30shield = my_rates->k30;
 	my_rates->k31shield = my_rates->k31;
+	/* RT H2 photodissociation (code units, like k31); as in Grackle it is added before H2 self-shielding is applied */
+	if (chemistry->use_radiative_transfer) my_rates->k31shield += gp->RT_H2_dissociation_rate;
 
 	/* Set up H2 self-shielding */
 	double f_shield = 1., l_H2shield;
@@ -55,7 +57,7 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
 	    else {  
 	        l_H2shield = cunits.c_ljeans * sqrt(gp->tgas / (gp->mmw * gp->density)); // otherwise we use the Jeans length
 	    }
-	    if (chemistry->H2_self_shielding >= 3) {
+	    if (chemistry->H2_self_shielding == 3) {
 	    /* H2 self-shielding following Wolcott-Green & Haiman (2019),
  	       range of validity: T=100-8000 K, n<=1e7 cm^-3 */
 	        const double N_H2 = cunits.dom * gp->rhoH2 * l_H2shield;
@@ -106,8 +108,8 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
             /* HeI self-shielding factor */
 	    if (my_rates->k26 < tiny) gp->fSShHeI = 1.;
 	    else {
-                const double nSSh_he =  6.73e-3 * pow(my_uvb_rates.crsHI * cunits.time_to_cgs * 1.e-12 / (2.49e-18 * my_rates->k26), -0.6666667) * pow(gp->tgas*1.e-4, 0.17);
-                const double nratio_he = gp->rhoHe * cunits.dom / nSSh_he;
+                const double nSSh_he =  6.73e-3 * pow(my_uvb_rates.crsHeI * cunits.time_to_cgs * 1.e-12 / (2.49e-18 * my_rates->k26), -0.6666667) * pow(gp->tgas*1.e-4, 0.17);
+                const double nratio_he = 0.25 * gp->rhoHe * cunits.dom / nSSh_he;  // He number density
                 gp->fSShHeI = 0.98*pow(1.+pow(nratio_he,1.64), -2.28) + 0.02*pow(1.+nratio_he, -0.84);
 	    }
         }
@@ -115,6 +117,7 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
         if (chemistry->self_shielding_method == 3 ) {
             /* HeII self-shielding factor: in this mode, HeII assumed to be completely shielded */
             gp->fSShHeII = 0.f;
+            my_rates->k25shield = 0.;  // as in Grackle: HeII photoionization ignored
         }
 
 	my_rates->k24shield *= gp->fSShHI;
