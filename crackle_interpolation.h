@@ -346,8 +346,8 @@ static inline double interpolate_3d(double *par, int *ind, double *cloudy_data, 
 	value = (par[0] - gridpar[0][ind[0]]) * slope + value2[1];
 	//assert( (par[2]>=0.9999*gridpar[2][ind[2]]) && (par[2]<=1.0001*gridpar[2][ind[2]+1]) ); // some slop to account for the cloudy table in floats vs crackle using doubles
 	if (value != value) {
-            printf("Something wrong in interpolate_3d! value=nan\n");
-            pause();
+            fprintf(stderr, "CRACKLE ERROR: interpolate_3d returned NaN (par=%g %g %g, ind=%d %d %d)\n", par[0], par[1], par[2], ind[0], ind[1], ind[2]);
+            abort();  // pause() would hang the job indefinitely
         }
 	return value;
 }
@@ -401,8 +401,8 @@ static inline double cloudy_metal_cooling(double logtem, chemistry_data *chemist
 	}
 
 	if (edot_metal != edot_metal) {
-                printf("Something wrong in cloudy_metal_cooling! edot_metal=nan\n");
-                pause();
+                fprintf(stderr, "CRACKLE ERROR: cloudy_metal_cooling returned NaN (logT=%g)\n", logtem);
+                abort();
         }
 
 	return edot_metal;

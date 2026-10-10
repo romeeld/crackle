@@ -21,6 +21,13 @@ static inline int check_hydrogen(grackle_part_data *p, int flag)
         return 0;
 }
 
+/* Is H2 formation on dust (h2dust) active? Matches Grackle's anydust = h2_on_dust || dust_chemistry, plus the dust evolution model.
+ * h2dust is only computed for primordial_chemistry >= 2, so it must not be used otherwise. */
+static inline int crackle_h2_on_dust(chemistry_data *chemistry)
+{
+	return chemistry->primordial_chemistry >= 2 && (chemistry->use_dust_evol || chemistry->dust_chemistry || chemistry->h2_on_dust);
+}
+
 static inline void set_crackle_units(code_units *units, chemistry_data_storage grackle_rates, double gamma, crackle_units *cunits) {
                 /* Set units */
         cunits->dom      = units->density_units/mh; // converts to equivalent physical H number density
@@ -119,7 +126,7 @@ static inline void copy_grackle_fields_to_part(grackle_field_data *p, grackle_pa
 {
 
 	/* initialize evolved quantities */
-	gp->edot = gp->edot_ext = gp->dedot = gp->HIdot = gp->H2Idot = gp->fSShHI = gp->fSShHeI = gp->fSShHeII = gp->rhoH = gp->rhoHe = gp->rhoH2 = gp->mmw = gp->tgas = gp->logtem = gp->delta_HI = gp->delta_HII = gp->delta_HeI = gp->delta_HeII = gp->delta_HeIII = gp->delta_HM = gp->delta_H2I = gp->delta_H2II = gp->delta_e = 0.;
+	gp->edot = gp->edot_ext = gp->edot_end = gp->dedot = gp->HIdot = gp->H2Idot = gp->fSShHI = gp->fSShHeI = gp->fSShHeII = gp->rhoH = gp->rhoHe = gp->rhoH2 = gp->mmw = gp->tgas = gp->logtem = gp->delta_HI = gp->delta_HII = gp->delta_HeI = gp->delta_HeII = gp->delta_HeIII = gp->delta_HM = gp->delta_H2I = gp->delta_H2II = gp->delta_e = 0.;
 	gp->tdust = -1.;  // initialize to negative value so it makes an initial guess
 
 	gp->grid_rank = p->grid_rank;

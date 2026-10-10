@@ -15,6 +15,7 @@ typedef struct
   /* For Crackle's integration scheme */
   double edot;
   double edot_ext;
+  double edot_end;  // edot near the end of the last iteration, for the timestep
   double dedot;
   double HIdot;
   double H2Idot;
@@ -325,6 +326,8 @@ typedef struct
 int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, chemistry_data_storage grackle_rates, photo_rate_storage uvb_rates, code_units *units, double dt);
 
 void evolve_internal_energy(grackle_part_data *gp, chemistry_data *chemistry, double dtit);
+
+void evolve_energy_ros2(grackle_part_data *gp, double u0, double dtit, chemistry_data *chemistry, chemistry_data_storage grackle_rates, chemistry_rate_storage *my_rates, photo_rate_storage uvb_rates, interp_struct *interpolation, code_units *units, crackle_units cunits, int ism_flag);
 
 void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_data_storage rates_table, chemistry_rate_storage *my_rates, photo_rate_storage uvb_rates, interp_struct *interpolation, code_units *units, crackle_units cunits, int ism_flag);
 
