@@ -44,6 +44,7 @@ typedef struct
   double delta_H2II;
   double delta_e;
   int verbose;
+  int freeze_shielding;  // if set, compute_edot reuses the self-shielding factors and shielded rates already computed
   int id;
 
   /* Scalar copy of grackle_field_data */
@@ -139,6 +140,13 @@ typedef struct {
   int cloudy_index[3];
   double cloudy_dxinv[3];
   //double cloudy_delta[3];
+  /* Per-call constants, set in init_temperature_interpolation() */
+  double cloudy_w[2];  // interpolation weights in density and redshift (fixed for the call)
+  double dust_logT_lo; // dust temperature table
+  double dust_dlogT;
+  double dust_dlogT_inv;
+  double ssh_nfac_HI;  // UVB-dependent part of the HI, HeI self-shielding densities (0 if no UVB)
+  double ssh_nfac_HeI;
 } interp_struct;
 
 typedef struct {
@@ -327,21 +335,21 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 
 void evolve_internal_energy(grackle_part_data *gp, chemistry_data *chemistry, double dtit);
 
-void evolve_energy_ros2(grackle_part_data *gp, double u0, double dtit, chemistry_data *chemistry, chemistry_data_storage grackle_rates, chemistry_rate_storage *my_rates, photo_rate_storage uvb_rates, interp_struct *interpolation, code_units *units, crackle_units cunits, int ism_flag);
+void evolve_energy_ros2(grackle_part_data *gp, double u0, double dtit, chemistry_data *chemistry, const chemistry_data_storage *grackle_rates, chemistry_rate_storage *my_rates, const photo_rate_storage *uvb_rates, interp_struct *interpolation, code_units *units, const crackle_units *cunits, int ism_flag);
 
-void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, chemistry_data_storage rates_table, chemistry_rate_storage *my_rates, photo_rate_storage uvb_rates, interp_struct *interpolation, code_units *units, crackle_units cunits, int ism_flag);
+void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, const chemistry_data_storage *rates_table, chemistry_rate_storage *my_rates, const photo_rate_storage *uvb_rates, interp_struct *interpolation, code_units *units, const crackle_units *cunits, int ism_flag);
 
-double compute_dedot(int chemistry_flag, grackle_part_data gp, chemistry_data *chemistry, chemistry_rate_storage my_rates, code_units *units);
+double compute_dedot(int chemistry_flag, const grackle_part_data *gp, chemistry_data *chemistry, const chemistry_rate_storage *my_rates, code_units *units);
 
-double compute_HIdot(int chemistry_flag, grackle_part_data gp, chemistry_data *chemistry, chemistry_rate_storage my_rates, code_units *units);
+double compute_HIdot(int chemistry_flag, const grackle_part_data *gp, chemistry_data *chemistry, const chemistry_rate_storage *my_rates, code_units *units);
 
 double compute_iteration_dt(grackle_part_data *gp, double edot_prev, chemistry_data *chemistry, double dt, double dtcool, float accuracy, double *dtsuppress);
 
-void evolve_helium(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, chemistry_rate_storage my_rates, double dtit);
+void evolve_helium(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, const chemistry_rate_storage *my_rates, double dtit);
 
-void evolve_hydrogen(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, chemistry_rate_storage my_rates, double dtit);
+void evolve_hydrogen(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry, const chemistry_rate_storage *my_rates, double dtit);
 
-void evolve_H2(grackle_part_data *gp, int ism_flag, chemistry_data *chemistry, chemistry_rate_storage my_rates, crackle_units cunits, double dtit);
+void evolve_H2(grackle_part_data *gp, int ism_flag, chemistry_data *chemistry, const chemistry_rate_storage *my_rates, const crackle_units *cunits, double dtit);
 
 void evolve_elements(grackle_part_data *gp, grackle_part_data *gp_old, chemistry_data *chemistry);
 

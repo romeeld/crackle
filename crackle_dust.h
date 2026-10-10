@@ -122,7 +122,10 @@ static inline double dust_thermal_balance(double tdust, double tgas, double tcmb
         /* Compute dust-radiation coupling constant */
         if (tdust < 200.f) kgr = kgr1 * tdust * tdust;
         else if (tdust > tsubl) kgr = kgr200;
-        else kgr = fmax(tiny, kgr200 * pow(tdust/tsubl, 12.f));
+        else {
+            const double x = tdust/tsubl, x4 = x*x*x*x;
+            kgr = fmax(tiny, kgr200 * x4*x4*x4);  // (tdust/tsubl)^12
+        }
         /* Compute dust heating-cooling rate */
         tdust4 = tdust * tdust * tdust * tdust;
         sol = gamma_isrf + 4.f * sigma_sb * kgr * (tcmb4 - tdust4) + gasgr * nh * (tgas-tdust);
