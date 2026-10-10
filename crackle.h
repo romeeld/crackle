@@ -44,6 +44,7 @@ typedef struct
   double delta_H2II;
   double delta_e;
   int verbose;
+  int freeze_shielding;  // if set, compute_edot reuses the self-shielding factors and shielded rates already computed
   int id;
 
   /* Scalar copy of grackle_field_data */

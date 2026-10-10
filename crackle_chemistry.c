@@ -210,7 +210,9 @@ void evolve_energy_ros2(grackle_part_data *gp, double u0, double dtit, chemistry
 
 	/* Jacobian by finite difference, using scratch copies. Only the damping part (J<0) is used; where J>0 (thermally unstable,
 	 * e.g. cooling decreasing with T) the step reduces to explicit 2nd-order Heun. */
+	/* The sub-evaluations change only u, so the self-shielding (weakly T-dependent) is held at its f(u0) value, like the species */
 	grackle_part_data g_tmp = *gp;
+	g_tmp.freeze_shielding = 1;
 	chemistry_rate_storage rates_tmp = *my_rates;
 	interp_struct interp_tmp = *interpolation;
 	const double fJ = crackle_dudt(&g_tmp, (1. + JAC_EPS) * u0, chemistry, grackle_rates, &rates_tmp, my_uvb_rates, &interp_tmp, units, cunits, ism_flag);
@@ -222,6 +224,7 @@ void evolve_energy_ros2(grackle_part_data *gp, double u0, double dtit, chemistry
 	double u_pred = u0 + dtit * k1;
 	u_pred = fmin(fmax(u_pred, fmax(u0 / ITER_HEATLIM, gp->u_cmb)), ITER_HEATLIM * u0);
 	g_tmp = *gp;
+	g_tmp.freeze_shielding = 1;
 	rates_tmp = *my_rates;
 	interp_tmp = *interpolation;
 	const double f1 = crackle_dudt(&g_tmp, u_pred, chemistry, grackle_rates, &rates_tmp, my_uvb_rates, &interp_tmp, units, cunits, ism_flag);
@@ -273,7 +276,7 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, const chemis
 	gp->edot += edot_prim;
 
 	/* Calculate self-shielding */
-	gp->f_shield = compute_self_shielded_rates(gp, chemistry, my_rates, my_uvb_rates, cunits, interpolation);
+	if (!gp->freeze_shielding) gp->f_shield = compute_self_shielded_rates(gp, chemistry, my_rates, my_uvb_rates, cunits, interpolation);
 	if (ism_flag == 0) gp->f_shield = 1.f;
 
 	/* Add H2 cooling (Glover & Abel 2008); fudge at extreme density NOT included */

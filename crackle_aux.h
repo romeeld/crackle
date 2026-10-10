@@ -241,6 +241,7 @@ static inline void copy_grackle_fields_to_part(grackle_field_data *p, grackle_pa
 	}
 
 	gp->verbose = 0;
+	gp->freeze_shielding = 0;
 }
 
 static inline void copy_grackle_fields_from_part(grackle_field_data *p, grackle_part_data *gp, chemistry_data *chemistry) 
