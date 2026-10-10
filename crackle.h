@@ -139,6 +139,13 @@ typedef struct {
   int cloudy_index[3];
   double cloudy_dxinv[3];
   //double cloudy_delta[3];
+  /* Per-call constants, set in init_temperature_interpolation() */
+  double cloudy_w[2];  // interpolation weights in density and redshift (fixed for the call)
+  double dust_logT_lo; // dust temperature table
+  double dust_dlogT;
+  double dust_dlogT_inv;
+  double ssh_nfac_HI;  // UVB-dependent part of the HI, HeI self-shielding densities (0 if no UVB)
+  double ssh_nfac_HeI;
 } interp_struct;
 
 typedef struct {

@@ -6,7 +6,7 @@
 #include "phys_constants.h"
 
 
-static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry_data *chemistry, chemistry_rate_storage *my_rates, const photo_rate_storage *my_uvb_rates, const crackle_units *cunits) {
+static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry_data *chemistry, chemistry_rate_storage *my_rates, const photo_rate_storage *my_uvb_rates, const crackle_units *cunits, const interp_struct *interpolation) {
 
 	my_rates->k24 = my_rates->k25 = my_rates->k26 =
 		my_rates->k27 = my_rates->k28 = my_rates->k29 =
@@ -97,9 +97,10 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
 
         /* self_shielding_method is at least 1: include HI self-shielding factor */
 	l_H2shield = cunits->c_ljeans * sqrt(gp->tgas / (gp->mmw * gp->density)); // use the Jeans length
+	const double tfac = pow(gp->tgas*1.e-4, 0.17);
         if (my_rates->k24 < tiny) gp->fSShHI = 1.;
 	else {
-            const double nSSh =  6.73e-3 * pow(my_uvb_rates->crsHI * cunits->time_to_cgs * 1.e-12 / (2.49e-18 * my_rates->k24), -0.6666667) * pow(gp->tgas*1.e-4, 0.17);
+            const double nSSh = interpolation->ssh_nfac_HI * tfac;
             const double nratio = gp->rhoH * cunits->dom / nSSh;
             gp->fSShHI = 0.98*pow(1.+pow(nratio,1.64), -2.28) + 0.02*pow(1.+nratio, -0.84);
 	}
@@ -108,7 +109,7 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
             /* HeI self-shielding factor */
 	    if (my_rates->k26 < tiny) gp->fSShHeI = 1.;
 	    else {
-                const double nSSh_he =  6.73e-3 * pow(my_uvb_rates->crsHeI * cunits->time_to_cgs * 1.e-12 / (2.49e-18 * my_rates->k26), -0.6666667) * pow(gp->tgas*1.e-4, 0.17);
+                const double nSSh_he = interpolation->ssh_nfac_HeI * tfac;
                 const double nratio_he = 0.25 * gp->rhoHe * cunits->dom / nSSh_he;  // He number density
                 gp->fSShHeI = 0.98*pow(1.+pow(nratio_he,1.64), -2.28) + 0.02*pow(1.+nratio_he, -0.84);
 	    }
@@ -131,7 +132,7 @@ static inline float compute_self_shielded_rates(grackle_part_data *gp, chemistry
 	return f_shield;
 }
 
-static inline void init_temperature_interpolation(grackle_part_data *gp, chemistry_data *chemistry, interp_struct *interpolation, const crackle_units *cunits, const chemistry_data_storage *gr)
+static inline void init_temperature_interpolation(grackle_part_data *gp, chemistry_data *chemistry, interp_struct *interpolation, const crackle_units *cunits, const chemistry_data_storage *gr, const photo_rate_storage *my_uvb_rates)
 {
 	/* mean mol weight and specific thermal energy */
 	double mmw_neutral = gp->density / (gp->HI_density + gp->HII_density + 0.25 * (gp->HeI_density + gp->HeII_density + gp->HeIII_density) + 0.5 * (gp->H2I_density + gp->H2II_density) + gp->HM_density);
@@ -161,16 +162,34 @@ static inline void init_temperature_interpolation(grackle_part_data *gp, chemist
 	interpolation->cloudy_dxinv[1] = 1. / (gr->cloudy_metal.grid_parameters[1][interpolation->cloudy_index[1]+1] - gr->cloudy_metal.grid_parameters[1][interpolation->cloudy_index[1]]);
 	//interpolation->cloudy_delta[1] = ((interpolation->cloudy_par[1] - gr->cloudy_metal.grid_parameters[1][interpolation->cloudy_index[1]]) * interpolation->cloudy_dxinv[1]);
 
+	/* Density and redshift don't change during the step, so their interpolation weights are fixed (linear in log n, log(1+z)) */
+	double *const *gpar = gr->cloudy_metal.grid_parameters;
+	const int i0 = interpolation->cloudy_index[0], i1 = interpolation->cloudy_index[1];
+	interpolation->cloudy_w[0] = (interpolation->cloudy_par[0] - gpar[0][i0]) / (gpar[0][i0+1] - gpar[0][i0]);
+	interpolation->cloudy_w[1] = log((1. + interpolation->cloudy_par[1]) / (1. + gpar[1][i1])) / log((1. + gpar[1][i1+1]) / (1. + gpar[1][i1]));
+
+	/* Dust temperature table */
+	interpolation->dust_logT_lo = log(chemistry->DustTemperatureStart);
+	interpolation->dust_dlogT = (log(chemistry->DustTemperatureEnd) - interpolation->dust_logT_lo) / (chemistry->NumberOfDustTemperatureBins-1);
+	interpolation->dust_dlogT_inv = 1. / interpolation->dust_dlogT;
+
+	/* UVB-dependent factors in the HI and HeI self-shielding densities (Rahmati+13 form, as in Grackle) */
+	interpolation->ssh_nfac_HI = interpolation->ssh_nfac_HeI = 0.;
+	if (chemistry->UVbackground > 0 && my_uvb_rates->k24 >= tiny)
+	    interpolation->ssh_nfac_HI = 6.73e-3 * pow(my_uvb_rates->crsHI * cunits->time_to_cgs * 1.e-12 / (2.49e-18 * my_uvb_rates->k24), -0.6666667);
+	if (chemistry->UVbackground > 0 && my_uvb_rates->k26 >= tiny)
+	    interpolation->ssh_nfac_HeI = 6.73e-3 * pow(my_uvb_rates->crsHeI * cunits->time_to_cgs * 1.e-12 / (2.49e-18 * my_uvb_rates->k26), -0.6666667);
+
 	/* Accuracy value must be non-zero otherwise code will not do cooling */
 	assert(chemistry->accuracy > 0.f && "CRACKLE ERROR: chemistry->accuracy input value must be greater than zero! (typically 0.1)");
 
 	return;
 }
 
-static inline void setup_temperature_interpolation(double tgas, chemistry_data *chemistry, interp_struct *interpolation)
+static inline void setup_temperature_interpolation(double logtem, chemistry_data *chemistry, interp_struct *interpolation)
 {
         /* Compute indexing for lookup tables */
-        interpolation->logT = log(tgas);
+        interpolation->logT = logtem;
         if (interpolation->logT > interpolation->logT_hi) interpolation->logT = interpolation->logT_hi;
         if (interpolation->logT < interpolation->logT_lo) interpolation->logT = interpolation->logT_lo;
         interpolation->index = (int)((interpolation->logT-interpolation->logT_lo) * interpolation->dlogT_inv);
@@ -283,12 +302,10 @@ static inline void dust_species_rates(double tdust, double dust2gas, chemistry_d
 
 	/* limit temperature table bounds */
         dust_interp->logT = log(tdust);
-        dust_interp->logT_lo = log(chemistry->DustTemperatureStart);
-        dust_interp->logT_hi = log(chemistry->DustTemperatureEnd);
-
-	/* interpolation table setup */
-        dust_interp->dlogT = (dust_interp->logT_hi - dust_interp->logT_lo)/(chemistry->NumberOfDustTemperatureBins-1);
-        dust_interp->dlogT_inv = 1./dust_interp->dlogT;
+        dust_interp->logT_lo = interpolation->dust_logT_lo;
+        dust_interp->dlogT = interpolation->dust_dlogT;
+        dust_interp->dlogT_inv = interpolation->dust_dlogT_inv;
+        dust_interp->logT_hi = dust_interp->logT_lo + (chemistry->NumberOfDustTemperatureBins-1) * dust_interp->dlogT;
 	if (dust_interp->logT < dust_interp->logT_lo + dust_interp->dlogT) dust_interp->logT = dust_interp->logT_lo + dust_interp->dlogT;
 	if (dust_interp->logT > dust_interp->logT_hi) dust_interp->logT = dust_interp->logT_hi;
 
@@ -328,25 +345,23 @@ static inline void lookup_chemistry_coeffs(int chemistry_flag, const chemistry_d
         deuterium_species_rates(chemistry_flag, interpolation, grackle_rates, my_rates);
 }
 
-static inline double interpolate_3d(const double *par, const int *ind, const double *cloudy_data, const long long int *griddim, double *const *gridpar)
+static inline double interpolate_3d(const interp_struct *interpolation, const double *cloudy_data, const long long int *griddim, double *const *gridpar)
 {
-	int q,w,int_index;
-	double value,value2[3], value3[3];
-	double slope;
-	for (q=1; q<3;q++) {
-	    for (w=1; w<3;w++) {
-		int_index = ((q+ind[0]-1)*griddim[1] + (w+ind[1]-1))*griddim[2] + (ind[2]);
-		slope = (cloudy_data[int_index+1] - cloudy_data[int_index]) / (gridpar[2][ind[2]+1] - gridpar[2][ind[2]]);
-		value3[w] = (par[2] - gridpar[2][ind[2]]) * slope + cloudy_data[int_index];
+	/* Trilinear in (log n, log(1+z), log T); the density and redshift weights are fixed for the call (init_temperature_interpolation) */
+	const int *ind = interpolation->cloudy_index;
+	const double wT = (interpolation->cloudy_par[2] - gridpar[2][ind[2]]) / (gridpar[2][ind[2]+1] - gridpar[2][ind[2]]);
+	double value2[2];
+	for (int q=0; q<2; q++) {
+	    double value3[2];
+	    for (int w=0; w<2; w++) {
+		const long long int k = ((q+ind[0])*griddim[1] + (w+ind[1]))*griddim[2] + ind[2];
+		value3[w] = cloudy_data[k] + wT * (cloudy_data[k+1] - cloudy_data[k]);
 	    }
-	    slope = (value3[2]-value3[1]) / log((1.+gridpar[1][ind[1]+1]) / (1.+gridpar[1][ind[1]]));
-	    value2[q] = log((1.+par[1]) / (1.+gridpar[1][ind[1]])) * slope + value3[1];
+	    value2[q] = value3[0] + interpolation->cloudy_w[1] * (value3[1] - value3[0]);
 	}
-	slope = (value2[2]-value2[1]) / (gridpar[0][ind[0]+1] - gridpar[0][ind[0]]);
-	value = (par[0] - gridpar[0][ind[0]]) * slope + value2[1];
-	//assert( (par[2]>=0.9999*gridpar[2][ind[2]]) && (par[2]<=1.0001*gridpar[2][ind[2]+1]) ); // some slop to account for the cloudy table in floats vs crackle using doubles
+	const double value = value2[0] + interpolation->cloudy_w[0] * (value2[1] - value2[0]);
 	if (value != value) {
-            fprintf(stderr, "CRACKLE ERROR: interpolate_3d returned NaN (par=%g %g %g, ind=%d %d %d)\n", par[0], par[1], par[2], ind[0], ind[1], ind[2]);
+            fprintf(stderr, "CRACKLE ERROR: interpolate_3d returned NaN (par=%g %g %g, ind=%d %d %d)\n", interpolation->cloudy_par[0], interpolation->cloudy_par[1], interpolation->cloudy_par[2], ind[0], ind[1], ind[2]);
             abort();  // pause() would hang the job indefinitely
         }
 	return value;
@@ -378,8 +393,8 @@ static inline double cloudy_metal_cooling(double logtem, chemistry_data *chemist
 
 	/* Metal cooling */
 	if (chemistry->metal_cooling) {
-	    log_edot = interpolate_3d(interpolation->cloudy_par, interpolation->cloudy_index, gr->cloudy_metal.cooling_data, gr->cloudy_metal.grid_dimension, gr->cloudy_metal.grid_parameters);
-	    edot_metal -= pow(10.f, log_edot);
+	    log_edot = interpolate_3d(interpolation, gr->cloudy_metal.cooling_data, gr->cloudy_metal.grid_dimension, gr->cloudy_metal.grid_parameters);
+	    edot_metal -= exp(M_LN10 * log_edot);
 	}
 
 	/* CMB heating, if near CMB temperature */
@@ -390,14 +405,14 @@ static inline double cloudy_metal_cooling(double logtem, chemistry_data *chemist
 	    //interpolation->cloudy_delta[2] = ((interpolation->cloudy_par[2] - gr->cloudy_metal.grid_parameters[2][interpolation->cloudy_index[2]]) * interpolation->cloudy_dxinv[2]); 
 	    if (interpolation->cloudy_index[2] < 0) interpolation->cloudy_index[2] = 0;
 	    if (interpolation->cloudy_index[2] > gr->cloudy_metal.grid_dimension[2]-2) interpolation->cloudy_index[2] = gr->cloudy_metal.grid_dimension[2]-2;
-	    log_edot = interpolate_3d(interpolation->cloudy_par, interpolation->cloudy_index, gr->cloudy_metal.cooling_data, gr->cloudy_metal.grid_dimension, gr->cloudy_metal.grid_parameters);
-	    edot_metal += pow(10.f, log_edot);
+	    log_edot = interpolate_3d(interpolation, gr->cloudy_metal.cooling_data, gr->cloudy_metal.grid_dimension, gr->cloudy_metal.grid_parameters);
+	    edot_metal += exp(M_LN10 * log_edot);
 	}
 
 	/* UVB heating */
 	if (chemistry->UVbackground) {
-	    log_edot = interpolate_3d(interpolation->cloudy_par, interpolation->cloudy_index, gr->cloudy_metal.heating_data, gr->cloudy_metal.grid_dimension, gr->cloudy_metal.grid_parameters);
-	    edot_metal += pow(10.f, log_edot);
+	    log_edot = interpolate_3d(interpolation, gr->cloudy_metal.heating_data, gr->cloudy_metal.grid_dimension, gr->cloudy_metal.grid_parameters);
+	    edot_metal += exp(M_LN10 * log_edot);
 	}
 
 	if (edot_metal != edot_metal) {

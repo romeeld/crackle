@@ -56,7 +56,7 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	if (gp.isrf_habing < 0.) gp.isrf_habing = 0.;
 
 	/* initialize inteprolation of chemistry rate tables for this particle */
-	init_temperature_interpolation(&gp, chemistry, &interpolation, &cunits, &grackle_rates);
+	init_temperature_interpolation(&gp, chemistry, &interpolation, &cunits, &grackle_rates, &my_uvb_rates);
 
 	while (dtcool < dt) {
 	    //if (gp.tgas < 100.) gp.verbose = 1;
@@ -65,7 +65,7 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	    /* Retain previous iteration particle info */
 	    memmove(&gp_old, &gp, sizeof(gp)); 
 	    /* Set up cooling/heating rates interpolation */
-	    setup_temperature_interpolation(gp.tgas, chemistry, &interpolation);
+	    setup_temperature_interpolation(gp.logtem, chemistry, &interpolation);
 	    /* Get interpolated chemistry rates for this particle */
 	    lookup_chemistry_coeffs(chemistry->primordial_chemistry, &grackle_rates, &my_rates, &interpolation);
 	    /* In the first iteration we need edot for the timestep; afterwards we use the effective edot of the previous iteration */
@@ -105,7 +105,7 @@ int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, ch
 	    grackle_part_data gp_mid = gp;
 	    gp_mid.internal_energy = 0.5 * (gp_old.internal_energy + gp.internal_energy);
 	    set_rhot(&gp_mid, units, chemistry);
-	    setup_temperature_interpolation(gp_mid.tgas, chemistry, &interpolation);
+	    setup_temperature_interpolation(gp_mid.logtem, chemistry, &interpolation);
 	    lookup_chemistry_coeffs(chemistry->primordial_chemistry, &grackle_rates, &my_rates, &interpolation);
 
 	    /* Do iteration again using step-averaged species densities; only need 1/2 iteration for species */
@@ -193,7 +193,7 @@ static double crackle_dudt(grackle_part_data *g, double u, chemistry_data *chemi
 {
 	g->internal_energy = u;
 	set_rhot(g, units, chemistry);
-	setup_temperature_interpolation(g->tgas, chemistry, interp);
+	setup_temperature_interpolation(g->logtem, chemistry, interp);
 	lookup_chemistry_coeffs(chemistry->primordial_chemistry, grackle_rates, rates, interp);
 	compute_edot(g, chemistry, grackle_rates, rates, my_uvb_rates, interp, units, cunits, ism_flag);
 	return g->edot / g->density;
@@ -273,7 +273,7 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, const chemis
 	gp->edot += edot_prim;
 
 	/* Calculate self-shielding */
-	gp->f_shield = compute_self_shielded_rates(gp, chemistry, my_rates, my_uvb_rates, cunits);
+	gp->f_shield = compute_self_shielded_rates(gp, chemistry, my_rates, my_uvb_rates, cunits, interpolation);
 	if (ism_flag == 0) gp->f_shield = 1.f;
 
 	/* Add H2 cooling (Glover & Abel 2008); fudge at extreme density NOT included */
@@ -810,9 +810,9 @@ void crackle_cooling_time(grackle_field_data *p, chemistry_data *chemistry, chem
 	/* Set up various unit conversions etc */
 	set_crackle_units(units, grackle_rates, chemistry->Gamma, &cunits);
 	/* initialize inteprolation of chemistry rate tables for this particle */
-	init_temperature_interpolation(gp, chemistry, &interpolation, &cunits, &grackle_rates);
+	init_temperature_interpolation(gp, chemistry, &interpolation, &cunits, &grackle_rates, &my_uvb_rates);
 	/* Set up cooling/heating rates interpolation */
-	setup_temperature_interpolation(gp->tgas, chemistry, &interpolation);
+	setup_temperature_interpolation(gp->logtem, chemistry, &interpolation);
 	/* Get interpolated chemistry rates for this particle */
 	lookup_chemistry_coeffs(chemistry->primordial_chemistry, &grackle_rates, &my_rates, &interpolation);  
 	/* ISM flag: see whether we should be forming dust and evolving H2 */

@@ -111,12 +111,14 @@ static inline int apply_temperature_bounds(grackle_part_data *gp, chemistry_data
         if (gp->tgas < tfloor && gp->edot < 0.) {
             gp->internal_energy *= tfloor / gp->tgas;
             gp->tgas = tfloor; 
+            gp->logtem = log(tfloor);
             return 1;
         }
         /* If we've reached temp ceiling and are still heating, we're also done */
 	else if (gp->tgas > tceiling && gp->edot > 0.) {
             gp->internal_energy *= tceiling / gp->tgas;
             gp->tgas = tceiling;
+            gp->logtem = log(tceiling);
             return 1;
         }
 	return 0;
