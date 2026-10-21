@@ -662,23 +662,16 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, co
 	H2Ip = p->H2I_density + p->delta_H2I;
 	HMp = p->HM_density + p->delta_HM;
 	dep = p->e_density + p->delta_e;
+	/* Equilibrium H2+ = formation / destruction rate. The destruction rate can be exactly zero, e.g. fully molecular
+	 * neutral gas (HI = e = H- = 0) above the UVB redshift range; then H2+ has no reactions and is left unchanged. */
+	double H2II_form = my_rates->k9 * HIp * HIIp + 0.5f * my_rates->k11 * H2Ip * HIIp + my_rates->k17 * HMp * HIIp;
+	double H2II_destr = my_rates->k10 * HIp + my_rates->k18 * dep + my_rates->k19 * HMp;
 	if (chemistry->UVbackground > 0) {
-	    p->delta_H2II = 2.f * (my_rates->k9 * HIp * HIIp +
-		0.5f * my_rates->k11 * H2Ip * HIIp +
-		my_rates->k17 * HMp * HIIp +
-		my_rates->k29shield * H2Ip) / 
-		(my_rates->k10 * HIp + my_rates->k18 * dep +
-		my_rates->k19 * HMp + my_rates->k28shield + my_rates->k30shield)
-		- p->H2II_density;
+	    H2II_form += my_rates->k29shield * H2Ip;
+	    H2II_destr += my_rates->k28shield + my_rates->k30shield;
 	}
-	else {
-	    p->delta_H2II = 2.f * (my_rates->k9 * HIp * HIIp +
-		0.5f * my_rates->k11 * H2Ip * HIIp +
-		my_rates->k17 * HMp * HIIp) / 
-		(my_rates->k10 * HIp + my_rates->k18 * dep +
-		my_rates->k19 * HMp)
-		- p->H2II_density;
-	}
+	if (H2II_destr > 0.) p->delta_H2II = 2.f * H2II_form / H2II_destr - p->H2II_density;
+	else p->delta_H2II = 0.;
 
 	/*if (p->delta_H2I != p->delta_H2I || p->delta_H2II != p->delta_H2II) {
 	    fprintf(stdout, "TROUBLE: dH2I=%g dH2II=%g scoef=%g acoef=%g H2Ip=%g e=%g k3=%g k4=%g k5=%g k6=%g k25=%g k25shielf=%g k26=%g\n", p->delta_H2I, p->delta_H2II, scoef, acoef, H2Ip, p->e_density, my_rates->k3, my_rates->k4, my_rates->k5, my_rates->k6, my_rates->k25, my_rates->k25shield, my_rates->k26);
