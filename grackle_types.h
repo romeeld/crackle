@@ -108,6 +108,9 @@ typedef struct
   
   gr_float *SNe_ThisTimeStep;
 
+  // output: dust temperature computed by crackle (left unchanged if NULL or not computed)
+  gr_float *dust_temperature;
+
 } grackle_field_data;
 
 typedef struct

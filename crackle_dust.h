@@ -149,7 +149,11 @@ static inline void calculate_tdust_bisect(grackle_part_data *gp, double gasgr, d
 	if (tbirthcloud > gp->tgas) tbirthcloud = gp->tgas;
 	if (tbirthcloud < tcmb) tbirthcloud = tcmb;
         /* If first time, initalize Tdust to some reasonable value */
-        if (gp->tdust <= 0.f) td = dust_thermal_balance(td, tbirthcloud, tcmb, tcmb4, gamma_isrf, gasgr, nbirthcloud); 
+        /* (the bisection range below is set from gp->tdust, so store the guess there) */
+        if (gp->tdust <= 0.f) {
+            td = dust_thermal_balance(td, tbirthcloud, tcmb, tcmb4, gamma_isrf, gasgr, nbirthcloud);
+            gp->tdust = td;
+        }
 	/* If Tgas has dropped below Tcmb (though it shouldn't); set Tdust to Tgas */
 	if (gp->tgas < tcmb) {
 	    gp->tdust = gp->tgas;

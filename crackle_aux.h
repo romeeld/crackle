@@ -269,6 +269,9 @@ static inline void copy_grackle_fields_from_part(grackle_field_data *p, grackle_
 	p->metal_density[0] = gp->metal_density;
 	p->internal_energy[0] = gp->internal_energy;
 
+	/* Dust temperature as used in the H2 formation and gas-grain rates */
+	if (p->dust_temperature != NULL && gp->tdust > 0.) p->dust_temperature[0] = gp->tdust;
+
 	if (chemistry->use_dust_evol) {
 	    p->dust_density[0] = gp->dust_density;
 	    p->He_gas_metalDensity[0] = gp->gas_metalDensity[0];
