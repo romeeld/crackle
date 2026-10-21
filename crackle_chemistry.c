@@ -28,6 +28,7 @@
 #define COOLLIM 1.e-3  // max cooling factor in T allowed in a single system timestep
 #define ITER_HEATLIM 10.  // max heating factor in u allowed in a single iteration
 #define JAC_EPS 0.05  // fractional change in u for the finite-difference d(edot)/du; coarse to tolerate tdust solver noise
+#define H2_FRAC_MIN_NONISM 1.e-3  // outside the ISM, H2/H mass fraction below which H2 is returned to HI rather than evolved
 
 
 int crackle_solve_chemistry(grackle_field_data *p, chemistry_data *chemistry, chemistry_data_storage grackle_rates, photo_rate_storage my_uvb_rates, code_units *units, double dt) 
@@ -608,15 +609,19 @@ void evolve_H2(grackle_part_data *p, int ism_flag, chemistry_data *chemistry, co
 { 
 	double scoef, acoef;
 
-	/* H2 immediately destroyed outside ISM and returned to atomic H */
-	if (ism_flag == 0) {
-	    if (p->rhoH2 > 0.f) {
+	/* Outside the ISM, H2 is evolved only while above a small fraction (e.g. H2 carried out of the ISM);
+	 * below this it is returned to atomic H, so H2 does not form from scratch outside the ISM (for speed) */
+	const double rhoH2 = p->H2I_density + p->H2II_density;
+	if (ism_flag == 0 && rhoH2 < H2_FRAC_MIN_NONISM * p->rhoH) {
+	    if (rhoH2 > 0.f || p->HM_density > 0.f) {
 	        p->HI_density += p->H2I_density + p->HM_density;
 	        p->HII_density += p->H2II_density;
-	        p->H2I_density = p->H2II_density = p->HM_density = 0.f;  
+	        p->H2I_density = p->H2II_density = p->HM_density = 0.f;
 	        p->H2Idot = 0.f;
 	        compute_electron_density(p);
 	    }
+	    /* clear any changes from a previous iteration when H2 was still being evolved */
+	    p->delta_H2I = p->delta_H2II = p->delta_HM = 0.f;
 	    return;
 	}
 
