@@ -295,7 +295,8 @@ void compute_edot(grackle_part_data *gp, chemistry_data *chemistry, const chemis
 	        double gasgr_tdust = chemistry->local_dust_to_gas_ratio * gasgr * cunits->coolunit / mh;
 	        /* Get dust rates */
 	        //gp->tdust = calculate_dust_temp(gp->tgas, gp->nH, gasgr_tdust, grackle_rates->gamma_isrf * gp->isrf_habing, cunits->compton2, gp->tdust); // calc_tdust_1d_g()
-	        calculate_tdust_bisect(gp, gasgr_tdust, grackle_rates->gamma_isrf * gp->isrf_habing * gp->f_shield, cunits->compton2);
+	        /* ISRF dust heating is not attenuated by f_shield: that is the H2 Lyman-Werner self-shielding factor, which does not apply to continuum absorption by grains */
+	        calculate_tdust_bisect(gp, gasgr_tdust, grackle_rates->gamma_isrf * gp->isrf_habing, cunits->compton2);
 		//if(gp->tdust < 2*cunits->compton2) printf("DUST td=%g gasgr=%g tcmb=%g isrf=%g\n",gp->tdust, gasgr_tdust, cunits->compton2, gp->isrf_habing);
 	        /* Gas-dust grain heat transfer rate */
 	        dust_species_rates(gp->tdust, gp->dust2gas, chemistry, grackle_rates, my_rates, interpolation);

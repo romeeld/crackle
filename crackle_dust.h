@@ -141,7 +141,8 @@ static inline void calculate_tdust_bisect(grackle_part_data *gp, double gasgr, d
         const float tcmb4 = tcmb * tcmb * tcmb * tcmb;
         float tdold = -1.e20;
 	float td = gp->tdust;
-        int iter = 0, maxiter = 100, sol;
+        int iter = 0, maxiter = 100;
+        double sol;
 
 	/* Find gas temperature of birth cloud where we assume dust lives, assuming pressure equil with ISM gas */
 	const float nbirthcloud = 1.e5;  // This should be above the threshold density in a lognormal SF model.
@@ -199,7 +200,8 @@ static inline double calculate_dust_temp(double tgas, double nh, double gasgr, d
         double eps=1.e-2, tdold = -1.e20, dsol, slope; // for Newton-Raphson
         //double tdlo=tcmb, tdhi=tgas; // bisection limits
         const double tcmb4 = tcmb * tcmb * tcmb * tcmb;
-        int iter = 0, maxiter = 100, sol;
+        int iter = 0, maxiter = 100;
+        double sol;
 
         /* Solve for Tdust via Newton-Raphson */
         if (td<=0.f) td = dust_thermal_balance(td, tgas, tcmb, tcmb4, gamma_isrf, gasgr, nh); // initial guess
