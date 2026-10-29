@@ -1,3 +1,5 @@
+**NOTE: crackle is retired.** This repository is frozen at its final version and will not be developed further. Crackle now lives inside the SWIFT simulation code as part of the Kiara model (https://github.com/kiara-project/SWIFT, branch romeel_dev, under src/cooling/KIARA/crackle), where it runs directly on the SWIFT particles and no longer needs Grackle. All further development (including multi-species dust) is happening there.
+
 Crackle is a fully C-based version of the Grackle cooling and chemistry code.  Information on Grackle is available here:
 https://grackle.readthedocs.io/en/latest/index.html
 
